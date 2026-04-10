@@ -1,0 +1,7 @@
+{
+  "name": "Thế Giới Nhỏ Kỳ Diệu Dự án Icloud",
+  "description": "Ứng dụng giáo dục khám phá thế giới côn trùng dành cho trẻ em với công nghệ nhận diện AI và trò chơi hóa.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

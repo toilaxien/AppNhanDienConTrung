@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Quản lý thông tin người dùng, điểm số và linh vật đại diện.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "description": "Tên đăng nhập của bé" },
+        "password": { "type": "string", "description": "Mật khẩu (đã mã hóa)" },
+        "parent_email": { "type": "string", "format": "email", "description": "Email của bố mẹ để khôi phục mật khẩu" },
+        "total_points": { "type": "number", "description": "Tổng điểm tích lũy" },
+        "avatar_id": { "type": "number", "description": "ID của loài côn trùng làm linh vật đại diện" }
+      },
+      "required": ["username", "total_points"]
+    },
+    "Insect": {
+      "title": "Insect",
+      "description": "Thông tin khoa học về các loài côn trùng.",
+      "type": "object",
+      "properties": {
+        "name_vi": { "type": "string", "description": "Tên tiếng Việt" },
+        "name_en": { "type": "string", "description": "Tên tiếng Anh" },
+        "scientific_name": { "type": "string", "description": "Tên khoa học" },
+        "description": { "type": "string", "description": "Mô tả ngắn gọn" },
+        "lifecycle_steps": { "type": "array", "description": "Các bước vòng đời" },
+        "habitat": { "type": "string", "description": "Môi trường sống" },
+        "role": { "type": "string", "description": "Vai trò (Lợi/Hại)" },
+        "image_cartoon": { "type": "string", "description": "URL ảnh minh họa 2D" },
+        "category_color": { "type": "string", "description": "Mã màu theo hệ" }
+      },
+      "required": ["name_vi", "name_en"]
+    },
+    "Collection": {
+      "title": "Collection",
+      "description": "Bản ghi thu thập côn trùng của bé.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string", "description": "ID người dùng" },
+        "insect_id": { "type": "string", "description": "ID loài côn trùng" },
+        "photo_path": { "type": "string", "description": "URL ảnh thực tế bé chụp" },
+        "captured_at": { "type": "string", "format": "date-time", "description": "Thời điểm thu thập" }
+      },
+      "required": ["user_id", "insect_id", "captured_at"]
+    },
+    "Rank": {
+      "title": "Rank",
+      "description": "Thứ hạng của người dùng.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string", "description": "ID người dùng" },
+        "current_rank": { "type": "number", "description": "Vị trí hạng hiện tại" },
+        "last_updated": { "type": "string", "format": "date-time", "description": "Thời điểm cập nhật" }
+      },
+      "required": ["user_id", "current_rank"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Thông tin cá nhân người dùng"
+    },
+    "/insects/{insectId}": {
+      "schema": "Insect",
+      "description": "Danh mục côn trùng hệ thống"
+    },
+    "/collections/{collectionId}": {
+      "schema": "Collection",
+      "description": "Bộ sưu tập của tất cả người dùng"
+    },
+    "/ranks/{userId}": {
+      "schema": "Rank",
+      "description": "Bảng xếp hạng"
+    }
+  }
+}
