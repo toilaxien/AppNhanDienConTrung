@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
 import { db, collection, query, where, getDocs, auth, onSnapshot } from '../firebase';
 import { Insect, CollectionItem, UserProfile } from '../types';
 import { ArrowLeft, Lock, Calendar, X, ChevronLeft, ChevronRight, Star, RefreshCw, Sparkles } from 'lucide-react';
@@ -18,6 +18,14 @@ export default function LibraryScreen({ profile, onBack }: Props) {
   const [isTorn, setIsTorn] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [userPhotos, setUserPhotos] = useState<CollectionItem[]>([]);
+
+  const dragY = useMotionValue(0);
+  const topPartY = useTransform(dragY, [0, 150], [0, -40]);
+  const topPartRotate = useTransform(dragY, [0, 150], [0, -5]);
+  const bottomPartY = useTransform(dragY, [0, 150], [0, 40]);
+  const bottomPartRotate = useTransform(dragY, [0, 150], [0, 2]);
+  const tearOpacity = useTransform(dragY, [0, 100], [0, 1]);
+  const hintOpacity = useTransform(dragY, [0, 50], [1, 0]);
 
   useEffect(() => {
     async function loadData() {
@@ -52,6 +60,7 @@ export default function LibraryScreen({ profile, onBack }: Props) {
     setIsPouchOpen(true);
     setIsTorn(false);
     setPhotoIndex(0);
+    dragY.set(0);
   };
 
   const collectedCount = new Set(collections.map(c => c.insect_id)).size;
@@ -152,35 +161,69 @@ export default function LibraryScreen({ profile, onBack }: Props) {
           >
             <div className="w-full max-w-sm relative h-[600px] flex items-center justify-center">
               {!isTorn ? (
-                <motion.div
-                  initial={{ scale: 0.5, rotate: -10 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  className="relative cursor-grab active:cursor-grabbing"
-                >
-                  {/* The Pouch (Pokemon Pack Style) */}
+                <div className="relative w-64 h-96">
+                  {/* The Pouch (Tearing Animation) */}
                   <motion.div 
                     drag="y"
                     dragConstraints={{ top: 0, bottom: 300 }}
+                    style={{ y: dragY }}
                     onDragEnd={(_, info) => {
                       if (info.offset.y > 150) {
                         setIsTorn(true);
+                        dragY.set(0);
+                      } else {
+                        dragY.set(0);
                       }
                     }}
-                    className="w-64 h-96 bg-gradient-to-br from-orange-400 to-red-500 rounded-3xl shadow-2xl border-8 border-white/20 flex flex-col items-center justify-center p-8 relative overflow-hidden"
+                    className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing"
+                  >
+                    {/* Invisible drag handle */}
+                    <div className="absolute inset-0" />
+                  </motion.div>
+
+                  {/* Top Half */}
+                  <motion.div
+                    style={{ y: topPartY, rotate: topPartRotate }}
+                    className="absolute top-0 left-0 right-0 h-1/4 bg-gradient-to-br from-orange-400 to-red-500 rounded-t-3xl border-t-8 border-l-8 border-r-8 border-white/20 overflow-hidden"
                   >
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
-                    <Sparkles className="w-20 h-20 text-white/50 absolute top-10 animate-pulse" />
-                    <div className="text-white font-black text-3xl text-center uppercase tracking-tighter drop-shadow-lg z-10">
-                      TÚI THẺ<br/>{selectedInsect.name_vi}
+                    <div className="absolute bottom-0 left-0 right-0 h-4 flex">
+                      {[...Array(10)].map((_, i) => (
+                        <div key={i} className="flex-1 h-full bg-[#C1E1C1] nature-bg" style={{ clipPath: 'polygon(0 100%, 50% 0, 100% 100%)' }} />
+                      ))}
                     </div>
-                    <div className="mt-8 bg-white/20 backdrop-blur-sm px-6 py-2 rounded-full text-white font-bold text-sm z-10">
-                      Kéo xuống để mở!
+                  </motion.div>
+
+                  {/* Bottom Half */}
+                  <motion.div
+                    style={{ y: bottomPartY, rotate: bottomPartRotate }}
+                    className="absolute top-1/4 left-0 right-0 bottom-0 bg-gradient-to-br from-orange-400 to-red-500 rounded-b-3xl border-b-8 border-l-8 border-r-8 border-white/20 flex flex-col items-center justify-center p-8 overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+                    <div className="absolute top-0 left-0 right-0 h-4 flex">
+                      {[...Array(10)].map((_, i) => (
+                        <div key={i} className="flex-1 h-full bg-[#C1E1C1] nature-bg" style={{ clipPath: 'polygon(0 0, 50% 100%, 100% 0)' }} />
+                      ))}
                     </div>
                     
-                    {/* Tear Line */}
-                    <div className="absolute top-10 left-0 right-0 h-1 bg-white/30 border-t-2 border-dashed border-white/50"></div>
+                    <Sparkles className="w-16 h-16 text-white/50 absolute top-4 animate-pulse" />
+                    <div className="text-white font-black text-2xl text-center uppercase tracking-tighter drop-shadow-lg z-10">
+                      TÚI THẺ<br/>{selectedInsect.name_vi}
+                    </div>
+                    <motion.div 
+                      style={{ opacity: hintOpacity }}
+                      className="mt-8 bg-white/20 backdrop-blur-sm px-6 py-2 rounded-full text-white font-bold text-xs z-10"
+                    >
+                      Kéo xuống để xé!
+                    </motion.div>
                   </motion.div>
-                </motion.div>
+
+                  {/* Tear Effect Glow */}
+                  <motion.div 
+                    style={{ opacity: tearOpacity }}
+                    className="absolute top-1/4 left-0 right-0 h-1 bg-white shadow-[0_0_20px_white] z-10"
+                  />
+                </div>
               ) : (
                 <motion.div
                   initial={{ opacity: 0 }}
