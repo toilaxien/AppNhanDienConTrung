@@ -126,14 +126,11 @@ export default function SplashScreen({ onFinish }: Props) {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center">
-        <p className="text-green-800 font-bold text-sm uppercase tracking-widest z-10">
+        <p className="text-green-800 font-bold text-sm uppercase tracking-widest z-10 mt-10">
           Đang đi tìm côn trùng...
         </p>
       </div>
 
-      <div className="pb-8 text-green-700/40 text-[10px] font-black uppercase tracking-[0.2em] z-10">
-        Magic Small World • 2026
-      </div>
     </div>
   );
 }
