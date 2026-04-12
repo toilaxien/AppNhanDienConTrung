@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
-import { db, collection, query, where, getDocs, auth, onSnapshot } from '../firebase';
+import { supabase } from '../supabase';
 import { Insect, CollectionItem, UserProfile } from '../types';
 import { ArrowLeft, Lock, Calendar, X, ChevronLeft, ChevronRight, Star, RefreshCw, Sparkles } from 'lucide-react';
 
@@ -28,24 +28,36 @@ export default function LibraryScreen({ profile, onBack }: Props) {
   const hintOpacity = useTransform(dragY, [0, 50], [1, 0]);
 
   useEffect(() => {
+    let channel: any = null;
+
     async function loadData() {
-      const insectSnap = await getDocs(collection(db, 'insects'));
-      const insectList = insectSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Insect));
-      setInsects(insectList);
+      const { data: insectList } = await supabase.from('insects').select('*');
+      if (insectList) {
+        setInsects(insectList as Insect[]);
+      }
 
       if (profile) {
-        const q = query(collection(db, 'collections'), where('user_id', '==', profile.uid));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          const collectionList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CollectionItem));
-          setCollections(collectionList);
-        }, (error) => {
-          console.warn("Library collections snapshot error:", error);
-        });
-        return () => unsubscribe();
+        const { data: collectionList } = await supabase.from('collections').select('*').eq('user_id', profile.uid);
+        if (collectionList) {
+          setCollections(collectionList as CollectionItem[]);
+        }
+
+        channel = supabase.channel('public:collections:library')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${profile.uid}` }, async () => {
+            const { data } = await supabase.from('collections').select('*').eq('user_id', profile.uid);
+            if (data) {
+              setCollections(data as CollectionItem[]);
+            }
+          })
+          .subscribe();
       }
       setLoading(false);
     }
     loadData();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [profile]);
 
   const isCollected = (insectId: string) => {
@@ -54,7 +66,7 @@ export default function LibraryScreen({ profile, onBack }: Props) {
 
   const handleInsectClick = (insect: Insect) => {
     if (!isCollected(insect.id)) return;
-    const photos = collections.filter(c => c.insect_id === insect.id).sort((a, b) => b.captured_at.seconds - a.captured_at.seconds);
+    const photos = collections.filter(c => c.insect_id === insect.id).sort((a, b) => new Date(b.captured_at).getTime() - new Date(a.captured_at).getTime());
     setUserPhotos(photos);
     setSelectedInsect(insect);
     setIsPouchOpen(true);
@@ -274,7 +286,7 @@ export default function LibraryScreen({ profile, onBack }: Props) {
                               <h3 className="text-lg font-black text-green-900 uppercase tracking-tighter leading-none mb-1">{selectedInsect.name_vi}</h3>
                               <div className="flex items-center gap-2 text-green-600 font-bold text-[10px] uppercase tracking-widest">
                                 <Calendar className="w-3 h-3" />
-                                Ngày thu thập: {photo.captured_at.toDate().toLocaleDateString('vi-VN')}
+                                Ngày thu thập: {new Date(photo.captured_at).toLocaleDateString('vi-VN')}
                               </div>
                               <div className="mt-2 flex gap-1">
                                 <span className="text-xl">✨</span>

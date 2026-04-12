@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { db, doc, updateDoc, collection, query, where, getDocs, onSnapshot, orderBy } from '../firebase';
+import { supabase } from '../supabase';
 import { UserProfile, Insect } from '../types';
 import { ArrowLeft, LogOut, Star, ShoppingBag, Trophy, Check, Lock } from 'lucide-react';
 
@@ -19,13 +19,15 @@ export default function ProfileScreen({ profile, onBack, onLogout }: Props) {
   const [rank, setRank] = useState<number | string>('--');
 
   useEffect(() => {
-    let unsubscribeCollections: (() => void) | null = null;
-    let unsubscribeRanks: (() => void) | null = null;
+    let channelCollections: any = null;
+    let channelRanks: any = null;
 
     async function loadData() {
       try {
-        const insectSnap = await getDocs(collection(db, 'insects'));
-        setInsects(insectSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Insect)));
+        const { data: insectSnap } = await supabase.from('insects').select('*');
+        if (insectSnap) {
+          setInsects(insectSnap as Insect[]);
+        }
 
         if (profile) {
           if (profile.uid.startsWith('local_')) {
@@ -40,25 +42,54 @@ export default function ProfileScreen({ profile, onBack, onLogout }: Props) {
               }
             }
           } else {
-            // Fetch collections for this user from Firestore
-            const q = query(collection(db, 'collections'), where('user_id', '==', profile.uid));
-            unsubscribeCollections = onSnapshot(q, (snapshot) => {
-              setCollectedIds(new Set(snapshot.docs.map(doc => doc.data().insect_id)));
-            }, (error) => {
-              console.warn("Collections snapshot error:", error);
-            });
+            // Fetch collections for this user from Supabase
+            const { data: collectionsData } = await supabase
+              .from('collections')
+              .select('insect_id')
+              .eq('user_id', profile.uid);
+            
+            if (collectionsData) {
+              setCollectedIds(new Set(collectionsData.map(doc => doc.insect_id)));
+            }
+
+            channelCollections = supabase.channel('public:collections')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${profile.uid}` }, (payload) => {
+                setCollectedIds(prev => {
+                  const newSet = new Set(prev);
+                  if (payload.eventType === 'INSERT') {
+                    newSet.add(payload.new.insect_id);
+                  }
+                  return newSet;
+                });
+              })
+              .subscribe();
 
             // Fetch all users to calculate rank
-            const usersQ = query(collection(db, 'users'), orderBy('total_points', 'desc'));
-            unsubscribeRanks = onSnapshot(usersQ, (snapshot) => {
-              const list = snapshot.docs.map(doc => doc.id);
+            const { data: usersData } = await supabase
+              .from('users')
+              .select('uid')
+              .order('total_points', { ascending: false });
+            
+            if (usersData) {
+              const list = usersData.map(doc => doc.uid);
               const myIdx = list.indexOf(profile.uid);
               if (myIdx !== -1) {
                 setRank(myIdx + 1);
               }
-            }, (error) => {
-              console.warn("Ranks snapshot error:", error);
-            });
+            }
+
+            channelRanks = supabase.channel('public:users:ranks')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, async () => {
+                const { data } = await supabase.from('users').select('uid').order('total_points', { ascending: false });
+                if (data) {
+                  const list = data.map(doc => doc.uid);
+                  const myIdx = list.indexOf(profile.uid);
+                  if (myIdx !== -1) {
+                    setRank(myIdx + 1);
+                  }
+                }
+              })
+              .subscribe();
           }
         }
       } catch (err) {
@@ -71,8 +102,8 @@ export default function ProfileScreen({ profile, onBack, onLogout }: Props) {
     loadData();
 
     return () => {
-      if (unsubscribeCollections) unsubscribeCollections();
-      if (unsubscribeRanks) unsubscribeRanks();
+      if (channelCollections) supabase.removeChannel(channelCollections);
+      if (channelRanks) supabase.removeChannel(channelRanks);
     };
   }, [profile?.uid]);
 
@@ -86,7 +117,7 @@ export default function ProfileScreen({ profile, onBack, onLogout }: Props) {
         // We need a way to refresh the app state, but for now this works on reload
         window.location.reload(); 
       } else {
-        await updateDoc(doc(db, 'users', profile.uid), { avatar_id: id });
+        await supabase.from('users').update({ avatar_id: id }).eq('uid', profile.uid);
       }
     } catch (error) {
       console.error("Avatar update error:", error);

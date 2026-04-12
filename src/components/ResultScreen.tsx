@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, doc, getDoc, auth, addDoc, collection, updateDoc, Timestamp, handleFirestoreError, OperationType, query, where, getDocs } from '../firebase';
+import { supabase } from '../supabase';
 import { UserProfile, Insect } from '../types';
 import { ArrowLeft, Heart, RefreshCw, MapPin, Activity, Info, Star, Camera, Image as ImageIcon } from 'lucide-react';
 
@@ -22,18 +22,20 @@ export default function ResultScreen({ profile, insectId, photoData, onBack, onS
 
   useEffect(() => {
     async function loadInsect() {
-      const docRef = doc(db, 'insects', insectId);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data() as Insect;
-        setInsect({ id: insectId, ...data } as Insect);
+      const { data: insectData } = await supabase.from('insects').select('*').eq('id', insectId).single();
+      if (insectData) {
+        setInsect(insectData as Insect);
 
         // Check if new
-        const uid = auth.currentUser?.uid;
+        const { data: { session } } = await supabase.auth.getSession();
+        const uid = session?.user?.id;
         if (uid) {
-          const q = query(collection(db, 'collections'), where('user_id', '==', uid), where('insect_id', '==', insectId));
-          const snap = await getDocs(q);
-          setIsNew(snap.empty);
+          const { data: collectionsData } = await supabase
+            .from('collections')
+            .select('*')
+            .eq('user_id', uid)
+            .eq('insect_id', insectId);
+          setIsNew(!collectionsData || collectionsData.length === 0);
         }
       }
       setLoading(false);
@@ -44,7 +46,8 @@ export default function ResultScreen({ profile, insectId, photoData, onBack, onS
   const handleSave = async () => {
     if (!insect || saving) return;
 
-    const uid = auth.currentUser?.uid || profile?.uid;
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session?.user?.id || profile?.uid;
     if (!uid) return;
 
     setSaving(true);
@@ -60,7 +63,7 @@ export default function ResultScreen({ profile, insectId, photoData, onBack, onS
           id: `local_${Date.now()}`,
           user_id: uid,
           insect_id: insectId,
-          captured_at: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 }, // Mock Firestore timestamp
+          captured_at: new Date().toISOString(),
           photo_path: photoData || insect.image_cartoon,
         };
         
@@ -75,27 +78,25 @@ export default function ResultScreen({ profile, insectId, photoData, onBack, onS
           localStorage.setItem('local_user', JSON.stringify(localUser));
         }
       } else {
-        // Add to collections in Firestore
-        await addDoc(collection(db, 'collections'), {
+        // Add to collections in Supabase
+        await supabase.from('collections').insert([{
           user_id: uid,
           insect_id: insectId,
-          captured_at: Timestamp.now(),
+          captured_at: new Date().toISOString(),
           photo_path: photoData || insect.image_cartoon,
-        });
+        }]);
 
-        // Update user points in Firestore
-        const userRef = doc(db, 'users', uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const currentPoints = userSnap.data().total_points || 0;
-          await updateDoc(userRef, { total_points: currentPoints + pointsToAdd });
+        // Update user points in Supabase
+        const { data: userSnap } = await supabase.from('users').select('total_points').eq('uid', uid).single();
+        if (userSnap) {
+          const currentPoints = userSnap.total_points || 0;
+          await supabase.from('users').update({ total_points: currentPoints + pointsToAdd }).eq('uid', uid);
         }
       }
 
       onSave();
     } catch (error) {
       console.error("Save error:", error);
-      handleFirestoreError(error, OperationType.WRITE, 'collections');
     } finally {
       setSaving(false);
     }

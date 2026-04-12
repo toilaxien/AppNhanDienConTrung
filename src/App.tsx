@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, onAuthStateChanged, FirebaseUser, db, doc, getDoc, setDoc, handleFirestoreError, OperationType, onSnapshot } from './firebase';
+import { supabase } from './supabase';
 import { UserProfile } from './types';
 import SplashScreen from './components/SplashScreen';
 import AuthScreen from './components/AuthScreen';
@@ -9,19 +9,21 @@ import ResultScreen from './components/ResultScreen';
 import LibraryScreen from './components/LibraryScreen';
 import RankScreen from './components/RankScreen';
 import ProfileScreen from './components/ProfileScreen';
+import UpdatePasswordScreen from './components/UpdatePasswordScreen';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bell, X } from 'lucide-react';
 
-type Screen = 'main' | 'scan' | 'result' | 'library' | 'rank' | 'profile';
+type Screen = 'main' | 'scan' | 'result' | 'library' | 'rank' | 'profile' | 'update_password';
 
 export default function App() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [currentScreen, setCurrentScreen] = useState<Screen>('main');
   const [selectedInsectId, setSelectedInsectId] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
 
   // Toast system
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'error' | 'success' } | null>(null);
@@ -45,40 +47,75 @@ export default function App() {
       }
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser) {
-        // Real-time profile listener
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            setProfile({ uid: firebaseUser.uid, ...docSnap.data() } as UserProfile);
-          } else {
-            // New user from Google Auth
+    let channel: any = null;
+
+    const handleSession = async (session: any) => {
+      setUser(session?.user || null);
+      if (session?.user) {
+        try {
+          const { data: existingProfile, error: fetchError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('uid', session.user.id)
+            .single();
+
+          if (existingProfile) {
+            setProfile(existingProfile as UserProfile);
+          } else if (fetchError && fetchError.code === 'PGRST116') {
+            // Not found, create new profile
             const newProfile: UserProfile = {
-              uid: firebaseUser.uid,
-              username: firebaseUser.displayName || 'Thám hiểm nhí',
+              uid: session.user.id,
+              username: session.user.user_metadata?.full_name || 'Thám hiểm nhí',
               total_points: 0,
               avatar_id: 1, // Default avatar
               role: 'user'
             };
-            setDoc(userDocRef, newProfile);
+            await supabase.from('users').insert([newProfile]);
             setProfile(newProfile);
+          } else {
+            console.error("Error fetching profile:", fetchError);
           }
-          setLoading(false);
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
-          setLoading(false);
-        });
 
-        return () => unsubscribeProfile();
+          // Real-time profile listener
+          if (channel) {
+            supabase.removeChannel(channel);
+          }
+          channel = supabase.channel(`profile_${session.user.id}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `uid=eq.${session.user.id}` }, (payload) => {
+              setProfile(payload.new as UserProfile);
+            })
+            .subscribe();
+
+        } catch (err) {
+          console.error("Session handling error:", err);
+        } finally {
+          setLoading(false);
+        }
       } else {
         setProfile(null);
         setLoading(false);
       }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleSession(session);
+      // Check if URL has recovery token
+      if (window.location.hash.includes('type=recovery')) {
+        setIsRecoveringPassword(true);
+      }
     });
 
-    return () => unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecoveringPassword(true);
+      }
+      handleSession(session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleSplashFinish = () => {
@@ -93,6 +130,56 @@ export default function App() {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-[#C1E1C1]">
         <div className="animate-bounce text-2xl font-bold text-green-800">Đang tải...</div>
+      </div>
+    );
+  }
+
+  if (isRecoveringPassword) {
+    return (
+      <div className="h-screen w-screen bg-[#A8D1A8] flex items-center justify-center p-0 sm:p-4 overflow-hidden relative">
+        <div className="absolute top-10 left-10 text-6xl opacity-20 pointer-events-none select-none">🍃</div>
+        <div className="absolute bottom-10 right-10 text-6xl opacity-20 pointer-events-none select-none">🌸</div>
+        <div className="absolute top-1/2 -left-5 text-6xl opacity-20 pointer-events-none select-none">🌿</div>
+        <div className="absolute top-1/4 -right-5 text-6xl opacity-20 pointer-events-none select-none">🌼</div>
+
+        <div className="h-full w-full max-w-[430px] max-h-[932px] bg-[#C1E1C1] nature-bg overflow-hidden flex flex-col font-sans relative shadow-2xl sm:rounded-[3rem] sm:border-[12px] border-green-900/20">
+          <UpdatePasswordScreen 
+            onBack={() => {
+              setIsRecoveringPassword(false);
+              window.location.hash = '';
+            }} 
+            onToast={showToast}
+          />
+          
+          <AnimatePresence>
+            {toast && (
+              <motion.div
+                initial={{ y: 100, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 100, opacity: 0 }}
+                className="absolute bottom-12 left-6 right-6 z-[100]"
+              >
+                <div className={`rounded-2xl p-4 shadow-2xl flex items-center gap-3 border-2 ${
+                  toast.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 
+                  toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 
+                  'bg-white border-blue-100 text-blue-800'
+                }`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    toast.type === 'error' ? 'bg-red-100' : 
+                    toast.type === 'success' ? 'bg-green-100' : 
+                    'bg-blue-50'
+                  }`}>
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <p className="flex-1 font-bold text-sm">{toast.message}</p>
+                  <button onClick={() => setToast(null)} className="p-1">
+                    <X className="w-4 h-4 opacity-50" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     );
   }
@@ -143,9 +230,9 @@ export default function App() {
     );
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('local_user');
-    auth.signOut();
+    await supabase.auth.signOut();
     setProfile(null);
     setCurrentScreen('main');
     showToast("Đã đăng xuất. Hẹn gặp lại con nhé!", "info");
@@ -217,6 +304,12 @@ export default function App() {
               profile={profile}
               onBack={() => setCurrentScreen('main')} 
               onLogout={handleLogout}
+            />
+          )}
+          {currentScreen === 'update_password' && (
+            <UpdatePasswordScreen 
+              onBack={() => setCurrentScreen('main')} 
+              onToast={showToast}
             />
           )}
         </AnimatePresence>

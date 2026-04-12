@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile } from '../types';
-import { auth, googleProvider, signInWithPopup, db, doc, setDoc, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from '../firebase';
+import { supabase } from '../supabase';
 import { User, Key, Mail, ArrowRight, LogIn, Camera, Upload, CheckCircle2 } from 'lucide-react';
 
 interface Props {
@@ -28,13 +28,18 @@ export default function AuthScreen({ onToast }: Props) {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
-      onToast("Chào mừng con đã quay lại!", "success");
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+      // Note: OAuth redirects, so toast might not show immediately here
     } catch (error: any) {
       console.error("Login error:", error);
       triggerShake();
       onToast("Ồ, có lỗi rồi. Con thử lại nhé!", "error");
-    } finally {
       setLoading(false);
     }
   };
@@ -58,7 +63,11 @@ export default function AuthScreen({ onToast }: Props) {
     }
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
       onToast("Chào mừng con đã quay lại!", "success");
     } catch (error: any) {
       console.error("Login error:", error);
@@ -78,25 +87,36 @@ export default function AuthScreen({ onToast }: Props) {
 
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: username,
+          }
+        }
+      });
+      if (error) throw error;
 
-      const userData: UserProfile = {
-        uid: user.uid,
-        username: username,
-        total_points: 0,
-        avatar_id: 1, // Default Ladybug
-        custom_avatar: regAvatar,
-        role: 'user',
-        parent_email: email
-      };
+      if (data.user) {
+        const userData: UserProfile = {
+          uid: data.user.id,
+          username: username,
+          total_points: 0,
+          avatar_id: 1, // Default Ladybug
+          custom_avatar: regAvatar,
+          role: 'user',
+          parent_email: email
+        };
 
-      await setDoc(doc(db, 'users', user.uid), userData);
+        await supabase.from('users').insert([userData]);
+      }
+      
       onToast("Đăng ký thành công! Chào mừng thám hiểm nhí " + username, "success");
     } catch (error: any) {
       console.error("Registration error:", error);
       triggerShake();
-      if (error.code === 'auth/email-already-in-use') {
+      if (error.message?.includes('already registered')) {
         onToast("Email này đã được dùng rồi con ạ!", "error");
       } else {
         onToast("Có lỗi khi đăng ký. Con thử lại nhé!", "error");
@@ -114,7 +134,10 @@ export default function AuthScreen({ onToast }: Props) {
     }
     setLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      });
+      if (error) throw error;
       onToast("Tín hiệu cứu hộ đã được gửi! Bố mẹ hãy kiểm tra email nhé!", "success");
       setMode('login');
     } catch (error: any) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { db, collection, query, orderBy, limit, onSnapshot, auth } from '../firebase';
+import { supabase } from '../supabase';
 import { RankItem } from '../types';
 import { ArrowLeft, Trophy, Star, Crown } from 'lucide-react';
 
@@ -14,27 +14,42 @@ export default function RankScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), orderBy('total_points', 'desc'), limit(50));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: RankItem[] = snapshot.docs.map((doc, index) => ({
-        user_id: doc.id,
-        username: doc.data().username,
-        total_points: doc.data().total_points,
-        avatar_id: doc.data().avatar_id,
-        rank: index + 1
-      }));
-      setRanks(list);
+    let channel: any = null;
 
-      if (auth.currentUser) {
-        const myIdx = list.findIndex(r => r.user_id === auth.currentUser?.uid);
-        if (myIdx !== -1) {
-          setMyRank(list[myIdx]);
+    async function loadRanks() {
+      const { data } = await supabase.from('users').select('*').order('total_points', { ascending: false }).limit(50);
+      if (data) {
+        const list: RankItem[] = data.map((doc, index) => ({
+          user_id: doc.uid,
+          username: doc.username,
+          total_points: doc.total_points,
+          avatar_id: doc.avatar_id,
+          rank: index + 1
+        }));
+        setRanks(list);
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const myIdx = list.findIndex(r => r.user_id === session.user.id);
+          if (myIdx !== -1) {
+            setMyRank(list[myIdx]);
+          }
         }
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    }
 
-    return () => unsubscribe();
+    loadRanks();
+
+    channel = supabase.channel('public:users:rankscreen')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        loadRanks();
+      })
+      .subscribe();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   const top3 = ranks.slice(0, 3);

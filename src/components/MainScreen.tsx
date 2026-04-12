@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile } from '../types';
-import { db, collection, query, where, getDocs, onSnapshot } from '../firebase';
+import { supabase } from '../supabase';
 import { Star, ShoppingBag, Trophy, User, Search, Sparkles } from 'lucide-react';
 
 interface Props {
@@ -25,23 +25,35 @@ export default function MainScreen({ profile, onNavigate, onToast }: Props) {
   useEffect(() => {
     if (!profile) return;
 
-    const q = query(collection(db, 'collections'), where('user_id', '==', profile.uid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const collectedIds = snapshot.docs.map(doc => doc.data().insect_id);
-      const uniqueInsects = new Set(collectedIds);
-      setCollectedCount(uniqueInsects.size);
+    let channel: any = null;
 
-      // Daily mission logic: pick a random insect not collected yet
-      const allInsects = ['Kiến', 'Bướm', 'Gián', 'Chuồn chuồn', 'Ruồi', 'Châu chấu', 'Ong rừng', 'Bọ rùa', 'Muỗi', 'Nhện'];
-      const uncollected = allInsects.filter(name => !collectedIds.includes(name)); // Simplified for now, should use IDs
-      if (uncollected.length > 0) {
-        setMission(uncollected[Math.floor(Math.random() * uncollected.length)]);
+    async function loadData() {
+      const { data } = await supabase.from('collections').select('insect_id').eq('user_id', profile.uid);
+      if (data) {
+        const collectedIds = data.map(doc => doc.insect_id);
+        const uniqueInsects = new Set(collectedIds);
+        setCollectedCount(uniqueInsects.size);
+
+        // Daily mission logic: pick a random insect not collected yet
+        const allInsects = ['Kiến', 'Bướm', 'Gián', 'Chuồn chuồn', 'Ruồi', 'Châu chấu', 'Ong rừng', 'Bọ rùa', 'Muỗi', 'Nhện'];
+        const uncollected = allInsects.filter(name => !collectedIds.includes(name)); // Simplified for now, should use IDs
+        if (uncollected.length > 0) {
+          setMission(uncollected[Math.floor(Math.random() * uncollected.length)]);
+        }
       }
-    }, (error) => {
-      console.warn("MainScreen collections snapshot error:", error);
-    });
+    }
 
-    return () => unsubscribe();
+    loadData();
+
+    channel = supabase.channel('public:collections:mainscreen')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${profile.uid}` }, () => {
+        loadData();
+      })
+      .subscribe();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [profile]);
 
   const handleTouchBackground = (e: React.MouseEvent) => {

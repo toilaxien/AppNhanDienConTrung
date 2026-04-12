@@ -1,5 +1,3 @@
-import { Timestamp } from './firebase';
-
 export interface UserProfile {
   uid: string;
   username: string;
@@ -34,7 +32,7 @@ export interface CollectionItem {
   user_id: string;
   insect_id: string;
   photo_path: string;
-  captured_at: Timestamp;
+  captured_at: string;
 }
 
 export interface RankItem {
