@@ -10,7 +10,7 @@ export interface RecognitionResult {
 export async function recognizeInsect(base64Image: string): Promise<RecognitionResult | null> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: {
         parts: [
           {
@@ -22,9 +22,9 @@ export async function recognizeInsect(base64Image: string): Promise<RecognitionR
           {
             text: `Identify the insect in this image. 
             Choose from the following list of IDs: 
-            'kien' (Ant), 'buom' (Butterfly), 'gian' (Cockroach), 'chuon-chuon' (Dragonfly), 'ruoi' (Fly), 'chau-chau' (Grasshopper), 'ong' (Bee), 'bo-rua' (Ladybug), 'muoi' (Mosquito), 'nhen' (Spider).
+            'ant' (Kiến), 'butterfly' (Bướm), 'cockroach' (Gián), 'dragonfly' (Chuồn chuồn), 'fly' (Ruồi), 'grasshopper' (Châu chấu), 'bee' (Ong), 'ladybug' (Bọ rùa), 'mosquito' (Muỗi), 'spider' (Nhện).
             Return the result in JSON format with 'insect_id' and 'confidence' (0-1).
-            If no insect from the list is found, return null.`,
+            If you are not sure or no insect from the list is found, return 'unknown' as the insect_id.`,
           },
         ],
       },
@@ -42,12 +42,12 @@ export async function recognizeInsect(base64Image: string): Promise<RecognitionR
     });
 
     const result = JSON.parse(response.text);
-    if (result && result.insect_id) {
+    if (result && result.insect_id && result.insect_id !== 'unknown') {
       return result;
     }
     return null;
   } catch (error) {
     console.error("Gemini Recognition Error:", error);
-    return null;
+    throw error;
   }
 }

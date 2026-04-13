@@ -111,14 +111,14 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
       
       try {
         const result = await recognizeInsect(base64Image);
-        if (result && result.confidence > 0.5) {
+        if (result && result.confidence > 0.3) {
           onResult(result.insect_id, fullBase64);
         } else {
-          onToast("Bạn này trốn kỹ quá, con thử soi lại gần hơn nhé!", "info");
+          onToast(`Bạn này trốn kỹ quá, con thử soi lại gần hơn nhé! (Độ tự tin: ${result?.confidence || 0})`, "info");
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Recognition error:", err);
-        onToast("Chú Bướm đang bận một chút, con thử lại sau nhé!", "error");
+        onToast(`Lỗi: ${err.message || "Chú Bướm đang bận một chút"}`, "error");
       }
     }
     setScanning(false);

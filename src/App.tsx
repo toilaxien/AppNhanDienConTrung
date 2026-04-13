@@ -48,51 +48,66 @@ export default function App() {
     }
 
     let channel: any = null;
+    let currentUserId: string | null = null;
 
     const handleSession = async (session: any) => {
       setUser(session?.user || null);
-      if (session?.user) {
-        try {
-          const { data: existingProfile, error: fetchError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('uid', session.user.id)
-            .single();
-
-          if (existingProfile) {
-            setProfile(existingProfile as UserProfile);
-          } else if (fetchError && fetchError.code === 'PGRST116') {
-            // Not found, create new profile
-            const newProfile: UserProfile = {
-              uid: session.user.id,
-              username: session.user.user_metadata?.full_name || 'Thám hiểm nhí',
-              total_points: 0,
-              avatar_id: 1, // Default avatar
-              role: 'user'
-            };
-            await supabase.from('users').insert([newProfile]);
-            setProfile(newProfile);
-          } else {
-            console.error("Error fetching profile:", fetchError);
-          }
-
-          // Real-time profile listener
-          if (channel) {
-            supabase.removeChannel(channel);
-          }
-          channel = supabase.channel(`profile_${session.user.id}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `uid=eq.${session.user.id}` }, (payload) => {
-              setProfile(payload.new as UserProfile);
-            })
-            .subscribe();
-
-        } catch (err) {
-          console.error("Session handling error:", err);
-        } finally {
-          setLoading(false);
+      
+      if (!session?.user) {
+        currentUserId = null;
+        if (channel) {
+          supabase.removeChannel(channel);
+          channel = null;
         }
-      } else {
         setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      if (currentUserId === session.user.id) {
+        setLoading(false);
+        return;
+      }
+
+      currentUserId = session.user.id;
+
+      try {
+        const { data: existingProfile, error: fetchError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('uid', session.user.id)
+          .single();
+
+        if (existingProfile) {
+          setProfile(existingProfile as UserProfile);
+        } else if (fetchError && fetchError.code === 'PGRST116') {
+          // Not found, create new profile
+          const newProfile: UserProfile = {
+            uid: session.user.id,
+            username: session.user.user_metadata?.full_name || 'Thám hiểm nhí',
+            total_points: 0,
+            avatar_id: 1, // Default avatar
+            role: 'user'
+          };
+          await supabase.from('users').insert([newProfile]);
+          setProfile(newProfile);
+        } else {
+          console.error("Error fetching profile:", fetchError);
+        }
+
+        // Real-time profile listener
+        if (channel) {
+          supabase.removeChannel(channel);
+        }
+        channel = supabase.channel(`profile_${session.user.id}_${Date.now()}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `uid=eq.${session.user.id}` }, (payload) => {
+            setProfile(payload.new as UserProfile);
+          })
+          .subscribe();
+
+      } catch (err) {
+        console.error("Session handling error:", err);
+      } finally {
         setLoading(false);
       }
     };
