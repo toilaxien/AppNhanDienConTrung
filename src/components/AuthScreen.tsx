@@ -27,16 +27,15 @@ export default function AuthScreen({ onToast }: Props) {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (error) throw error;
-      // Note: OAuth redirects, so toast might not show immediately here
-    } catch (error: any) {
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: 'http://localhost:3000',
+      },
+    });
+
+    if (error) {
       console.error("Login error:", error);
       triggerShake();
       onToast("Ồ, có lỗi rồi. Con thử lại nhé!", "error");
