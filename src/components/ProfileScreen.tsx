@@ -8,9 +8,10 @@ interface Props {
   profile: UserProfile | null;
   onBack: () => void;
   onLogout: () => void;
+  onUpdateProfile?: (profile: UserProfile) => void;
 }
 
-export default function ProfileScreen({ profile, onBack, onLogout }: Props) {
+export default function ProfileScreen({ profile, onBack, onLogout, onUpdateProfile }: Props) {
   const [insects, setInsects] = useState<Insect[]>([]);
   const [collectedIds, setCollectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -52,7 +53,7 @@ export default function ProfileScreen({ profile, onBack, onLogout }: Props) {
               setCollectedIds(new Set(collectionsData.map(doc => doc.insect_id)));
             }
 
-            channelCollections = supabase.channel('public:collections')
+            channelCollections = supabase.channel(`public:collections_${profile.uid}_${Date.now()}`)
               .on('postgres_changes', { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${profile.uid}` }, (payload) => {
                 setCollectedIds(prev => {
                   const newSet = new Set(prev);
@@ -78,7 +79,7 @@ export default function ProfileScreen({ profile, onBack, onLogout }: Props) {
               }
             }
 
-            channelRanks = supabase.channel('public:users:ranks')
+            channelRanks = supabase.channel(`public:users:ranks_${profile.uid}_${Date.now()}`)
               .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, async () => {
                 const { data } = await supabase.from('users').select('uid').order('total_points', { ascending: false });
                 if (data) {
@@ -111,11 +112,13 @@ export default function ProfileScreen({ profile, onBack, onLogout }: Props) {
     if (!profile || saving) return;
     setSaving(true);
     try {
+      const updatedProfile = { ...profile, avatar_id: id };
+      if (onUpdateProfile) {
+        onUpdateProfile(updatedProfile);
+      }
+      
       if (profile.uid.startsWith('local_')) {
-        const updatedProfile = { ...profile, avatar_id: id };
         localStorage.setItem('local_user', JSON.stringify(updatedProfile));
-        // We need a way to refresh the app state, but for now this works on reload
-        window.location.reload(); 
       } else {
         await supabase.from('users').update({ avatar_id: id }).eq('uid', profile.uid);
       }

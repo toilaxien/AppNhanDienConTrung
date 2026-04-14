@@ -42,7 +42,7 @@ export default function LibraryScreen({ profile, onBack }: Props) {
           setCollections(collectionList as CollectionItem[]);
         }
 
-        channel = supabase.channel('public:collections:library')
+        channel = supabase.channel(`public:collections:library_${profile.uid}_${Date.now()}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${profile.uid}` }, async () => {
             const { data } = await supabase.from('collections').select('*').eq('user_id', profile.uid);
             if (data) {

@@ -319,6 +319,7 @@ export default function App() {
               profile={profile}
               onBack={() => setCurrentScreen('main')} 
               onLogout={handleLogout}
+              onUpdateProfile={(updatedProfile) => setProfile(updatedProfile)}
             />
           )}
           {currentScreen === 'update_password' && (

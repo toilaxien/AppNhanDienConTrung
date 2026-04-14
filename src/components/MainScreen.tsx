@@ -45,7 +45,7 @@ export default function MainScreen({ profile, onNavigate, onToast }: Props) {
 
     loadData();
 
-    channel = supabase.channel('public:collections:mainscreen')
+    channel = supabase.channel(`public:collections:mainscreen_${profile.uid}_${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${profile.uid}` }, () => {
         loadData();
       })
