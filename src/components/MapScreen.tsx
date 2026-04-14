@@ -99,6 +99,7 @@ export default function MapScreen({ profile, onBack }: Props) {
       const { data: collectionsData } = await supabase
         .from('collections')
         .select('*')
+        .neq('insect_id', 'unknown_insect')
         .not('latitude', 'is', null)
         .not('longitude', 'is', null);
 

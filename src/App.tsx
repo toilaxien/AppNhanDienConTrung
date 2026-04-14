@@ -52,7 +52,31 @@ export default function App() {
     let channel: any = null;
     let currentUserId: string | null = null;
 
+    const ensureUnknownInsectExists = async () => {
+      try {
+        const { data } = await supabase.from('insects').select('id').eq('id', 'unknown_insect').single();
+        if (!data) {
+          await supabase.from('insects').insert([{
+            id: 'unknown_insect',
+            name_vi: 'Côn trùng mới',
+            name_en: 'Unknown Insect',
+            scientific_name: 'Incognita',
+            description: 'Một loài côn trùng mới mà hệ thống chưa nhận diện được. Bé hãy tiếp tục theo dõi nhé!',
+            habitat: 'Chưa rõ',
+            habitat_icon: '🌍',
+            role: 'Bí ẩn',
+            role_icon: '❓',
+            category_color: '#9ca3af',
+            image_cartoon: 'https://cdn-icons-png.flaticon.com/512/1864/1864520.png'
+          }]);
+        }
+      } catch (e) {
+        // Ignore if it already exists or fails
+      }
+    };
+
     const handleSession = async (session: any) => {
+      ensureUnknownInsectExists();
       setUser(session?.user || null);
       
       if (!session?.user) {

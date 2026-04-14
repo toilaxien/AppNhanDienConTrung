@@ -129,7 +129,7 @@ export default function LibraryScreen({ profile, onBack, onOpenMap }: Props) {
       {/* Grid */}
       <div className="flex-1 overflow-y-auto px-6 pt-4 pb-24">
         <div className="grid grid-cols-2 gap-6">
-          {insects.map((insect) => {
+          {insects.filter(i => i.id !== 'unknown_insect').map((insect) => {
             const collected = isCollected(insect.id);
             return (
               <motion.button
@@ -170,6 +170,30 @@ export default function LibraryScreen({ profile, onBack, onOpenMap }: Props) {
             );
           })}
         </div>
+
+        {/* Unknown Insects Section */}
+        {collections.some(c => c.insect_id === 'unknown_insect') && (
+          <div className="mt-8">
+            <h3 className="text-xl font-black text-green-900 uppercase tracking-tighter mb-4">Côn trùng mới phát hiện</h3>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                const unknownInsect = insects.find(i => i.id === 'unknown_insect');
+                if (unknownInsect) handleInsectClick(unknownInsect);
+              }}
+              className="w-full bg-white rounded-3xl p-4 flex items-center justify-between shadow-md border-4 border-gray-200"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-gray-200 rounded-2xl flex items-center justify-center text-3xl">❓</div>
+                <div className="text-left">
+                  <div className="font-black text-gray-700 text-lg">Côn trùng bí ẩn</div>
+                  <div className="text-gray-500 font-bold text-sm">Đã chụp: {collections.filter(c => c.insect_id === 'unknown_insect').length}</div>
+                </div>
+              </div>
+              <ChevronRight className="text-gray-400" />
+            </motion.button>
+          </div>
+        )}
       </div>
 
       {/* Pouch Opening Modal */}
