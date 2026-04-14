@@ -33,6 +33,8 @@ export interface CollectionItem {
   insect_id: string;
   photo_path: string;
   captured_at: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface RankItem {

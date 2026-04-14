@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react';
 import { supabase } from '../supabase';
 import { Insect, CollectionItem, UserProfile } from '../types';
-import { ArrowLeft, Lock, Calendar, X, ChevronLeft, ChevronRight, Star, RefreshCw, Sparkles } from 'lucide-react';
+import { ArrowLeft, Lock, Calendar, X, ChevronLeft, ChevronRight, Star, RefreshCw, Sparkles, MapPin } from 'lucide-react';
 
 interface Props {
   profile: UserProfile | null;
   onBack: () => void;
+  onOpenMap: () => void;
 }
 
-export default function LibraryScreen({ profile, onBack }: Props) {
+export default function LibraryScreen({ profile, onBack, onOpenMap }: Props) {
   const [insects, setInsects] = useState<Insect[]>([]);
   const [collections, setCollections] = useState<CollectionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,15 +88,24 @@ export default function LibraryScreen({ profile, onBack }: Props) {
 
       {/* Wooden Ruler Progress */}
       <div className="p-6 pb-2">
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={onBack}
+              className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center text-green-800"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </motion.button>
+            <h2 className="text-2xl font-black text-green-900 uppercase tracking-tighter">Thư viện</h2>
+          </div>
           <motion.button
             whileTap={{ scale: 0.9 }}
-            onClick={onBack}
-            className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center text-green-800"
+            onClick={onOpenMap}
+            className="w-10 h-10 bg-blue-500 rounded-full shadow-md flex items-center justify-center text-white"
           >
-            <ArrowLeft className="w-6 h-6" />
+            <MapPin className="w-5 h-5" />
           </motion.button>
-          <h2 className="text-2xl font-black text-green-900 uppercase tracking-tighter">Thư viện</h2>
         </div>
 
         <div className="relative h-12 bg-[#8B4513] rounded-lg border-4 border-[#5D2E0A] shadow-inner flex items-center px-4 overflow-hidden">

@@ -10,10 +10,11 @@ import LibraryScreen from './components/LibraryScreen';
 import RankScreen from './components/RankScreen';
 import ProfileScreen from './components/ProfileScreen';
 import UpdatePasswordScreen from './components/UpdatePasswordScreen';
+import MapScreen from './components/MapScreen';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bell, X } from 'lucide-react';
 
-type Screen = 'main' | 'scan' | 'result' | 'library' | 'rank' | 'profile' | 'update_password';
+type Screen = 'main' | 'scan' | 'result' | 'library' | 'rank' | 'profile' | 'update_password' | 'map';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -23,6 +24,7 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('main');
   const [selectedInsectId, setSelectedInsectId] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [captureLocation, setCaptureLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
 
   // Toast system
@@ -279,9 +281,14 @@ export default function App() {
           {currentScreen === 'scan' && (
             <ScanScreen 
               onBack={() => setCurrentScreen('main')} 
-              onResult={(id, photo) => {
+              onResult={(id, photo, lat, lng) => {
                 setSelectedInsectId(id);
                 setCapturedPhoto(photo);
+                if (lat !== undefined && lng !== undefined) {
+                  setCaptureLocation({ lat, lng });
+                } else {
+                  setCaptureLocation(null);
+                }
                 setCurrentScreen('result');
               }} 
               onToast={showToast}
@@ -292,6 +299,7 @@ export default function App() {
               profile={profile}
               insectId={selectedInsectId} 
               photoData={capturedPhoto}
+              location={captureLocation}
               onBack={() => setCurrentScreen('main')} 
               onSave={() => {
                 // Refresh profile points
@@ -307,6 +315,13 @@ export default function App() {
             <LibraryScreen 
               profile={profile}
               onBack={() => setCurrentScreen('main')} 
+              onOpenMap={() => setCurrentScreen('map')}
+            />
+          )}
+          {currentScreen === 'map' && (
+            <MapScreen 
+              profile={profile}
+              onBack={() => setCurrentScreen('library')} 
             />
           )}
           {currentScreen === 'rank' && (

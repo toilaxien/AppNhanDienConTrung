@@ -31,7 +31,9 @@ CREATE TABLE public.collections (
   user_id TEXT REFERENCES public.users(uid) ON DELETE CASCADE,
   insect_id TEXT REFERENCES public.insects(id) ON DELETE CASCADE,
   captured_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-  photo_path TEXT NOT NULL
+  photo_path TEXT NOT NULL,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION
 );
 
 -- 4. Insert Initial Insect Data (Example)

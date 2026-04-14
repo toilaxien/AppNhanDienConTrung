@@ -8,11 +8,12 @@ interface Props {
   profile: UserProfile | null;
   insectId: string;
   photoData: string | null;
+  location?: { lat: number; lng: number } | null;
   onBack: () => void;
   onSave: () => void;
 }
 
-export default function ResultScreen({ profile, insectId, photoData, onBack, onSave }: Props) {
+export default function ResultScreen({ profile, insectId, photoData, location, onBack, onSave }: Props) {
   const [insect, setInsect] = useState<Insect | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -65,6 +66,8 @@ export default function ResultScreen({ profile, insectId, photoData, onBack, onS
           insect_id: insectId,
           captured_at: new Date().toISOString(),
           photo_path: photoData || insect.image_cartoon,
+          latitude: location?.lat,
+          longitude: location?.lng,
         };
         
         localCollections.push(newItem);
@@ -84,6 +87,8 @@ export default function ResultScreen({ profile, insectId, photoData, onBack, onS
           insect_id: insectId,
           captured_at: new Date().toISOString(),
           photo_path: photoData || insect.image_cartoon,
+          latitude: location?.lat,
+          longitude: location?.lng,
         }]);
 
         // Update user points in Supabase

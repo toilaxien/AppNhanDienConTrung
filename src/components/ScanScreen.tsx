@@ -5,7 +5,7 @@ import { recognizeInsect } from '../services/geminiService';
 
 interface Props {
   onBack: () => void;
-  onResult: (insectId: string, photoData: string) => void;
+  onResult: (insectId: string, photoData: string, latitude?: number, longitude?: number) => void;
   onToast: (message: string, type?: 'info' | 'error' | 'success') => void;
 }
 
@@ -15,11 +15,27 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!ready) return;
+
+    // Request location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (err) => {
+          console.warn("Geolocation error:", err);
+        }
+      );
+    }
 
     async function startCamera() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -112,7 +128,7 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
       try {
         const result = await recognizeInsect(base64Image);
         if (result && result.confidence > 0.3) {
-          onResult(result.insect_id, fullBase64);
+          onResult(result.insect_id, fullBase64, location?.lat, location?.lng);
         } else {
           onToast(`Bạn này trốn kỹ quá, con thử soi lại gần hơn nhé! (Độ tự tin: ${result?.confidence || 0})`, "info");
         }
