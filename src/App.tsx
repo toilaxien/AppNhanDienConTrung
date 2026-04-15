@@ -11,6 +11,7 @@ import RankScreen from './components/RankScreen';
 import ProfileScreen from './components/ProfileScreen';
 import UpdatePasswordScreen from './components/UpdatePasswordScreen';
 import MapScreen from './components/MapScreen';
+import PermissionScreen from './components/PermissionScreen';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bell, X } from 'lucide-react';
 
@@ -21,6 +22,7 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
+  const [showPermissions, setShowPermissions] = useState(true);
   const [currentScreen, setCurrentScreen] = useState<Screen>('main');
   const [selectedInsectId, setSelectedInsectId] = useState<string | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -165,6 +167,24 @@ export default function App() {
 
   if (showSplash) {
     return <SplashScreen onFinish={handleSplashFinish} />;
+  }
+
+  if (showPermissions) {
+    return (
+      <div className="h-screen w-screen bg-[#A8D1A8] flex items-center justify-center p-0 sm:p-4 overflow-hidden relative">
+        <div className="absolute top-10 left-10 text-6xl opacity-20 pointer-events-none select-none">🍃</div>
+        <div className="absolute bottom-10 right-10 text-6xl opacity-20 pointer-events-none select-none">🌸</div>
+        <div className="absolute top-1/2 -left-5 text-6xl opacity-20 pointer-events-none select-none">🌿</div>
+        <div className="absolute top-1/4 -right-5 text-6xl opacity-20 pointer-events-none select-none">🌼</div>
+
+        <div className="h-full w-full max-w-[430px] max-h-[932px] bg-[#C1E1C1] nature-bg overflow-hidden flex flex-col font-sans relative shadow-2xl sm:rounded-[3rem] sm:border-[12px] border-green-900/20">
+          <PermissionScreen onComplete={() => {
+            localStorage.setItem('permissions_requested', 'true');
+            setShowPermissions(false);
+          }} />
+        </div>
+      </div>
+    );
   }
 
   if (loading) {

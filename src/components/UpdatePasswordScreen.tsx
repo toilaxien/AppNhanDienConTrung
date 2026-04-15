@@ -14,18 +14,22 @@ export default function UpdatePasswordScreen({ onBack, onToast }: Props) {
 
   const handleUpdatePassword = async () => {
     if (!password) {
-      onToast("Con hãy nhập mật khẩu mới nhé!", "info");
+      onToast("Bố mẹ hãy nhập mật khẩu mới nhé!", "info");
       return;
     }
     setLoading(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      onToast("Đổi mật khẩu thành công!", "success");
+      
+      // Đăng xuất ngay lập tức để không tự động vào app
+      await supabase.auth.signOut();
+      
+      onToast("Đổi mật khẩu thành công! Bố mẹ hãy dùng mật khẩu mới để bé đăng nhập nhé.", "success");
       onBack();
     } catch (error: any) {
       console.error("Update password error:", error);
-      onToast("Có lỗi xảy ra, con thử lại nhé!", "error");
+      onToast("Có lỗi xảy ra, bố mẹ thử lại nhé!", "error");
     } finally {
       setLoading(false);
     }

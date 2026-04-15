@@ -11,8 +11,8 @@ export async function recognizeInsect(base64Image: string): Promise<RecognitionR
   try {
     // === HƯỚNG DẪN TÍCH HỢP YOLO11 ===
     // Khi bạn có API cho model YOLO11, hãy bỏ comment đoạn code dưới đây và thay thế URL:
-    /*
-    const YOLO_API_URL = 'https://api-yolo11-cua-ban.com/predict';
+    
+    const YOLO_API_URL = 'https://toilaxien-yolo-insect-api.hf.space/predict';
     const response = await fetch(YOLO_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -25,10 +25,10 @@ export async function recognizeInsect(base64Image: string): Promise<RecognitionR
     } else {
       return { insect_id: 'unknown_insect', confidence: 1.0 };
     }
-    */
+    
     // ===================================
 
-    // Tạm thời vẫn dùng Gemini làm fallback
+    /* Tạm thời vẫn dùng Gemini làm fallback
     const response = await ai.models.generateContent({
       model: "gemini-flash-latest",
       contents: {
@@ -66,6 +66,7 @@ export async function recognizeInsect(base64Image: string): Promise<RecognitionR
       return result;
     }
     return { insect_id: 'unknown_insect', confidence: 1.0 };
+    */
   } catch (error) {
     console.error("Recognition Error:", error);
     return { insect_id: 'unknown_insect', confidence: 1.0 };

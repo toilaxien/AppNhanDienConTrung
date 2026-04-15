@@ -17,11 +17,7 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-  const [ready, setReady] = useState(false);
-
   useEffect(() => {
-    if (!ready) return;
-
     // Request location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -81,34 +77,7 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [ready]);
-
-  if (!ready) {
-    return (
-      <div className="h-full w-full bg-[#C1E1C1] flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center shadow-xl mb-8 border-8 border-white">
-          <Camera className="w-16 h-16 text-green-600" />
-        </div>
-        <h2 className="text-2xl font-black text-green-900 uppercase tracking-tighter mb-4">Sẵn sàng chưa thám hiểm nhí?</h2>
-        <p className="text-green-800 font-bold mb-8">Con hãy cho phép chú Bướm dùng camera để soi tìm các bạn côn trùng nhé!</p>
-        <div className="flex flex-col w-full gap-4">
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setReady(true)}
-            className="w-full bg-orange-500 text-white font-black py-4 rounded-3xl shadow-lg uppercase tracking-tighter"
-          >
-            SẴN SÀNG!
-          </motion.button>
-          <button 
-            onClick={onBack}
-            className="text-green-800 font-black uppercase tracking-tighter text-sm"
-          >
-            ĐỂ SAU NHÉ
-          </button>
-        </div>
-      </div>
-    );
-  }
+  }, []);
 
   const handleScan = async () => {
     if (!videoRef.current || !canvasRef.current || scanning) return;
@@ -139,6 +108,54 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
     }
     setScanning(false);
   };
+
+  if (error) {
+    const isIframe = window.self !== window.top;
+    
+    return (
+      <div className="h-full w-full bg-[#C1E1C1] flex flex-col items-center justify-center p-8 text-center relative">
+        <button 
+          onClick={onBack}
+          className="absolute top-6 left-6 p-2 bg-white/80 rounded-full shadow-md text-green-800"
+        >
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+
+        <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6 border-4 border-white shadow-lg">
+          <X className="w-12 h-12 text-red-500" />
+        </div>
+        
+        <h2 className="text-2xl font-black text-green-900 uppercase tracking-tighter mb-4">Ôi, có lỗi rồi!</h2>
+        <p className="text-green-800 font-bold mb-6 leading-relaxed">
+          {error}
+        </p>
+
+        {isIframe && (
+          <div className="bg-orange-50 border-2 border-orange-200 p-4 rounded-2xl mb-6 text-sm text-orange-800 font-bold shadow-sm">
+            <p className="mb-2">⚠️ Chú ý: Con đang dùng ứng dụng trong khung xem trước.</p>
+            <p>Hãy nhấn vào nút <span className="text-orange-600">"Mở trong tab mới"</span> ở góc trên bên phải màn hình để Camera hoạt động tốt nhất nhé!</p>
+          </div>
+        )}
+
+        <div className="flex flex-col w-full gap-3">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => window.location.reload()}
+            className="w-full bg-green-600 text-white font-black py-4 rounded-3xl shadow-lg uppercase tracking-tighter"
+          >
+            TẢI LẠI TRANG
+          </motion.button>
+          
+          <button 
+            onClick={onBack}
+            className="text-green-800 font-black uppercase tracking-tighter text-sm py-2"
+          >
+            QUAY LẠI
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full bg-black relative overflow-hidden flex flex-col">
@@ -214,22 +231,6 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
 
         <div className="w-12"></div>
       </div>
-
-      {error && (
-        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-8 text-center">
-          <X className="w-16 h-16 text-red-500 mb-4" />
-          <p className="text-white font-bold text-xl mb-4">{error}</p>
-          <p className="text-gray-400 text-sm mb-8">
-            Nếu vẫn không được, con hãy thử nhấn vào nút <b>"Mở trong tab mới"</b> ở góc trên bên phải màn hình nhé!
-          </p>
-          <button 
-            onClick={onBack}
-            className="bg-white text-black font-bold px-8 py-3 rounded-full"
-          >
-            Quay lại
-          </button>
-        </div>
-      )}
     </div>
   );
 }

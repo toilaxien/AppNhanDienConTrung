@@ -111,7 +111,11 @@ export default function AuthScreen({ onToast }: Props) {
         await supabase.from('users').insert([userData]);
       }
       
-      onToast("Đăng ký thành công! Chào mừng thám hiểm nhí " + username, "success");
+      // Đăng xuất ngay sau khi đăng ký để bắt buộc đăng nhập tay
+      await supabase.auth.signOut();
+      setMode('login');
+      
+      onToast("Đăng ký thành công! Con hãy đăng nhập để bắt đầu nhé.", "success");
     } catch (error: any) {
       console.error("Registration error:", error);
       triggerShake();
