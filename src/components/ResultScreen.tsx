@@ -220,7 +220,7 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
               )}
 
               {/* Toggle Photo Button */}
-              {photoData && insectId !== 'unknown_insect' && (
+              {photoData && (
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={(e) => { e.stopPropagation(); setShowActualPhoto(!showActualPhoto); }}
