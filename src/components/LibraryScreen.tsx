@@ -179,21 +179,10 @@ export default function LibraryScreen({ profile, onBack, onOpenMap }: Props) {
             onClick={() => {
               const count = collections.filter(c => c.insect_id === 'unknown_insect').length;
               if (count === 0) return; // Prevent clicking if none collected
-              const unknownInsect: Insect = {
-                id: 'unknown_insect',
-                name_vi: 'Côn trùng bí ẩn',
-                name_en: 'Mystery Insect',
-                scientific_name: 'Unknown Species',
-                description: 'Một loài côn trùng bí ẩn mà chú Bướm chưa từng gặp. Con hãy lưu lại để sau này tìm hiểu thêm nhé!',
-                lifecycle_steps: [],
-                habitat: 'Chưa rõ',
-                habitat_icon: '❓',
-                role: 'Bí ẩn',
-                role_icon: '✨',
-                image_cartoon: 'https://cdn-icons-png.flaticon.com/512/1864/1864509.png',
-                category_color: '#4b5563',
-              };
-              handleInsectClick(unknownInsect);
+              const unknownInsect = insects.find(i => i.id === 'unknown_insect');
+              if (unknownInsect) {
+                handleInsectClick(unknownInsect);
+              }
             }}
             className={`w-full bg-white rounded-3xl p-4 flex items-center justify-between shadow-md border-4 ${collections.some(c => c.insect_id === 'unknown_insect') ? 'border-gray-200 cursor-pointer' : 'border-gray-200 opacity-60 grayscale cursor-not-allowed'}`}
           >

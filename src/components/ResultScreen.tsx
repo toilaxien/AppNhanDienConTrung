@@ -23,37 +23,6 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
 
   useEffect(() => {
     async function loadInsect() {
-      if (insectId === 'unknown_insect') {
-        setInsect({
-          id: 'unknown_insect',
-          name_vi: 'Côn trùng bí ẩn',
-          name_en: 'Mystery Insect',
-          scientific_name: 'Unknown Species',
-          description: 'Một loài côn trùng bí ẩn mà chú Bướm chưa từng gặp. Con hãy lưu lại để sau này tìm hiểu thêm nhé!',
-          lifecycle_steps: [],
-          habitat: 'Chưa rõ',
-          habitat_icon: '❓',
-          role: 'Bí ẩn',
-          role_icon: '✨',
-          image_cartoon: 'https://cdn-icons-png.flaticon.com/512/1864/1864509.png',
-          category_color: '#4b5563', // Gray
-        });
-        
-        // Check if new
-        const { data: { session } } = await supabase.auth.getSession();
-        const uid = session?.user?.id;
-        if (uid) {
-          const { data: collectionsData } = await supabase
-            .from('collections')
-            .select('*')
-            .eq('user_id', uid)
-            .eq('insect_id', 'unknown_insect');
-          setIsNew(!collectionsData || collectionsData.length === 0);
-        }
-        setLoading(false);
-        return;
-      }
-
       const { data: insectData } = await supabase
         .from('insects')
         .select(`
