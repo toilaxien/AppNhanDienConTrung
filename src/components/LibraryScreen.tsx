@@ -172,28 +172,48 @@ export default function LibraryScreen({ profile, onBack, onOpenMap }: Props) {
         </div>
 
         {/* Unknown Insects Section */}
-        {collections.some(c => c.insect_id === 'unknown_insect') && (
-          <div className="mt-8">
-            <h3 className="text-xl font-black text-green-900 uppercase tracking-tighter mb-4">Côn trùng mới phát hiện</h3>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                const unknownInsect = insects.find(i => i.id === 'unknown_insect');
-                if (unknownInsect) handleInsectClick(unknownInsect);
-              }}
-              className="w-full bg-white rounded-3xl p-4 flex items-center justify-between shadow-md border-4 border-gray-200"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-gray-200 rounded-2xl flex items-center justify-center text-3xl">❓</div>
-                <div className="text-left">
-                  <div className="font-black text-gray-700 text-lg">Côn trùng bí ẩn</div>
-                  <div className="text-gray-500 font-bold text-sm">Đã chụp: {collections.filter(c => c.insect_id === 'unknown_insect').length}</div>
-                </div>
+        <div className="mt-8 pb-16 relative z-10">
+          <h3 className="text-xl font-black text-green-900 uppercase tracking-tighter mb-4">Côn trùng bí ẩn</h3>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              const count = collections.filter(c => c.insect_id === 'unknown_insect').length;
+              if (count === 0) return; // Prevent clicking if none collected
+              const unknownInsect: Insect = {
+                id: 'unknown_insect',
+                name_vi: 'Côn trùng bí ẩn',
+                name_en: 'Mystery Insect',
+                scientific_name: 'Unknown Species',
+                description: 'Một loài côn trùng bí ẩn mà chú Bướm chưa từng gặp. Con hãy lưu lại để sau này tìm hiểu thêm nhé!',
+                lifecycle_steps: [],
+                habitat: 'Chưa rõ',
+                habitat_icon: '❓',
+                role: 'Bí ẩn',
+                role_icon: '✨',
+                image_cartoon: 'https://cdn-icons-png.flaticon.com/512/1864/1864509.png',
+                category_color: '#4b5563',
+              };
+              handleInsectClick(unknownInsect);
+            }}
+            className={`w-full bg-white rounded-3xl p-4 flex items-center justify-between shadow-md border-4 ${collections.some(c => c.insect_id === 'unknown_insect') ? 'border-gray-200 cursor-pointer' : 'border-gray-200 opacity-60 grayscale cursor-not-allowed'}`}
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-gray-200 rounded-2xl flex items-center justify-center text-3xl shadow-inner relative">
+                ❓
+                {!collections.some(c => c.insect_id === 'unknown_insect') && (
+                  <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-2xl">
+                    <Lock className="w-6 h-6 text-gray-500" />
+                  </div>
+                )}
               </div>
-              <ChevronRight className="text-gray-400" />
-            </motion.button>
-          </div>
-        )}
+              <div className="text-left">
+                <div className="font-black text-gray-700 text-lg uppercase tracking-tighter">Côn trùng bí ẩn</div>
+                <div className="text-gray-500 font-bold text-sm">Đã chụp: {collections.filter(c => c.insect_id === 'unknown_insect').length}</div>
+              </div>
+            </div>
+            <ChevronRight className="text-gray-400" />
+          </motion.button>
+        </div>
       </div>
 
       {/* Pouch Opening Modal */}
@@ -308,24 +328,37 @@ export default function LibraryScreen({ profile, onBack, onOpenMap }: Props) {
                               }
                             }}
                             className="absolute inset-0 bg-white rounded-[2.5rem] shadow-2xl border-[10px] overflow-hidden flex flex-col cursor-grab active:cursor-grabbing"
-                            style={{ borderColor: selectedInsect.category_color }}
+                            style={{ borderColor: selectedInsect.id === 'unknown_insect' ? '#374151' : selectedInsect.category_color }}
                           >
                             <div className="h-3/4 relative bg-gray-100">
-                              <img src={photo.photo_path} className="w-full h-full object-cover" />
+                              <img src={photo.photo_path} className={`w-full h-full object-cover ${selectedInsect.id === 'unknown_insect' ? 'contrast-125 saturate-50' : ''}`} />
+                              {selectedInsect.id === 'unknown_insect' && (
+                                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent pointer-events-none" />
+                              )}
                               <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1 shadow-md">
                                 <span className="text-[10px] font-black text-green-900 uppercase">Thẻ {idx + 1}/{userPhotos.length}</span>
                               </div>
                             </div>
-                            <div className="flex-1 p-4 flex flex-col justify-center items-center text-center bg-white">
-                              <h3 className="text-lg font-black text-green-900 uppercase tracking-tighter leading-none mb-1">{selectedInsect.name_vi}</h3>
-                              <div className="flex items-center gap-2 text-green-600 font-bold text-[10px] uppercase tracking-widest">
+                            <div className={`flex-1 p-4 flex flex-col justify-center items-center text-center ${selectedInsect.id === 'unknown_insect' ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+                              <h3 className={`text-lg font-black uppercase tracking-tighter leading-none mb-1 ${selectedInsect.id === 'unknown_insect' ? 'text-gray-100' : 'text-green-900'}`}>{selectedInsect.name_vi}</h3>
+                              <div className={`flex items-center gap-2 font-bold text-[10px] uppercase tracking-widest ${selectedInsect.id === 'unknown_insect' ? 'text-gray-400' : 'text-green-600'}`}>
                                 <Calendar className="w-3 h-3" />
                                 Ngày thu thập: {new Date(photo.captured_at).toLocaleDateString('vi-VN')}
                               </div>
                               <div className="mt-2 flex gap-1">
-                                <span className="text-xl">✨</span>
-                                <span className="text-xl">🦋</span>
-                                <span className="text-xl">✨</span>
+                                {selectedInsect.id === 'unknown_insect' ? (
+                                  <>
+                                    <span className="text-xl opacity-50">❓</span>
+                                    <span className="text-xl">✨</span>
+                                    <span className="text-xl opacity-50">❓</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-xl">✨</span>
+                                    <span className="text-xl">🦋</span>
+                                    <span className="text-xl">✨</span>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </motion.div>

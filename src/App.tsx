@@ -344,7 +344,7 @@ export default function App() {
               insectId={selectedInsectId} 
               photoData={capturedPhoto}
               location={captureLocation}
-              onBack={() => setCurrentScreen('main')} 
+              onBack={() => setCurrentScreen('scan')} 
               onSave={() => {
                 // Refresh profile points
                 if (profile) {

@@ -23,7 +23,51 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
 
   useEffect(() => {
     async function loadInsect() {
-      const { data: insectData } = await supabase.from('insects').select('*').eq('id', insectId).single();
+      if (insectId === 'unknown_insect') {
+        setInsect({
+          id: 'unknown_insect',
+          name_vi: 'Côn trùng bí ẩn',
+          name_en: 'Mystery Insect',
+          scientific_name: 'Unknown Species',
+          description: 'Một loài côn trùng bí ẩn mà chú Bướm chưa từng gặp. Con hãy lưu lại để sau này tìm hiểu thêm nhé!',
+          lifecycle_steps: [],
+          habitat: 'Chưa rõ',
+          habitat_icon: '❓',
+          role: 'Bí ẩn',
+          role_icon: '✨',
+          image_cartoon: photoData || 'https://cdn-icons-png.flaticon.com/512/1864/1864509.png',
+          category_color: '#4b5563', // Gray
+        });
+        
+        // Check if new
+        const { data: { session } } = await supabase.auth.getSession();
+        const uid = session?.user?.id;
+        if (uid) {
+          const { data: collectionsData } = await supabase
+            .from('collections')
+            .select('*')
+            .eq('user_id', uid)
+            .eq('insect_id', 'unknown_insect');
+          setIsNew(!collectionsData || collectionsData.length === 0);
+        }
+        setLoading(false);
+        return;
+      }
+
+      const { data: insectData } = await supabase
+        .from('insects')
+        .select(`
+          *,
+          insect_lifecycles (
+            step_order,
+            step_name,
+            description,
+            icon
+          )
+        `)
+        .eq('id', insectId)
+        .single();
+        
       if (insectData) {
         setInsect(insectData as Insect);
 
@@ -155,8 +199,8 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
         >
           {/* Front Side */}
           <div 
-            className="absolute inset-0 bg-white rounded-[3rem] shadow-2xl overflow-hidden border-[10px] backface-hidden flex flex-col"
-            style={{ borderColor: insect.category_color }}
+            className={`absolute inset-0 rounded-[3rem] shadow-2xl overflow-hidden border-[10px] backface-hidden flex flex-col ${insectId === 'unknown_insect' ? 'bg-gray-800' : 'bg-white'}`}
+            style={{ borderColor: insectId === 'unknown_insect' ? '#374151' : insect.category_color }}
           >
             <div className="h-1/2 relative bg-gray-100 overflow-hidden">
               <AnimatePresence mode="wait">
@@ -167,12 +211,16 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
                   exit={{ opacity: 0, scale: 0.9 }}
                   src={showActualPhoto && photoData ? photoData : insect.image_cartoon} 
                   alt={insect.name_vi} 
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full object-cover ${insectId === 'unknown_insect' ? 'contrast-125 saturate-50' : ''}`}
                 />
               </AnimatePresence>
 
+              {insectId === 'unknown_insect' && (
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent pointer-events-none" />
+              )}
+
               {/* Toggle Photo Button */}
-              {photoData && (
+              {photoData && insectId !== 'unknown_insect' && (
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={(e) => { e.stopPropagation(); setShowActualPhoto(!showActualPhoto); }}
@@ -199,77 +247,83 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
 
             <div className="flex-1 p-6 flex flex-col gap-3">
               <div className="text-center">
-                <h2 className="text-2xl font-black text-green-900 uppercase tracking-tighter leading-none mb-1">
+                <h2 className={`text-2xl font-black uppercase tracking-tighter leading-none mb-1 ${insectId === 'unknown_insect' ? 'text-gray-100' : 'text-green-900'}`}>
                   {insect.name_vi}
                 </h2>
-                <h3 className="text-lg font-bold text-green-700 uppercase tracking-tighter leading-none mb-1">
+                <h3 className={`text-lg font-bold uppercase tracking-tighter leading-none mb-1 ${insectId === 'unknown_insect' ? 'text-gray-400' : 'text-green-700'}`}>
                   {insect.name_en}
                 </h3>
-                <p className="text-[10px] italic text-green-600 font-bold">{insect.scientific_name}</p>
+                <p className={`text-[10px] italic font-bold ${insectId === 'unknown_insect' ? 'text-gray-500' : 'text-green-600'}`}>{insect.scientific_name}</p>
               </div>
 
-              <p className="text-xs text-green-800 font-bold leading-tight line-clamp-3 text-center px-2">
+              <p className={`text-xs font-bold leading-tight line-clamp-3 text-center px-2 ${insectId === 'unknown_insect' ? 'text-gray-300' : 'text-green-800'}`}>
                 {insect.description}
               </p>
 
               <div className="grid grid-cols-2 gap-2 mt-auto">
-                <div className="bg-green-50 rounded-2xl p-2 flex flex-col items-center justify-center border-2 border-green-100">
+                <div className={`rounded-2xl p-2 flex flex-col items-center justify-center border-2 ${insectId === 'unknown_insect' ? 'bg-gray-700 border-gray-600' : 'bg-green-50 border-green-100'}`}>
                   <span className="text-xl mb-1">{insect.habitat_icon}</span>
-                  <span className="text-[9px] font-black text-green-800 uppercase text-center">{insect.habitat}</span>
+                  <span className={`text-[9px] font-black uppercase text-center ${insectId === 'unknown_insect' ? 'text-gray-300' : 'text-green-800'}`}>{insect.habitat}</span>
                 </div>
-                <div className="bg-green-50 rounded-2xl p-2 flex flex-col items-center justify-center border-2 border-green-100">
+                <div className={`rounded-2xl p-2 flex flex-col items-center justify-center border-2 ${insectId === 'unknown_insect' ? 'bg-gray-700 border-gray-600' : 'bg-green-50 border-green-100'}`}>
                   <span className="text-xl mb-1">{insect.role_icon}</span>
-                  <span className="text-[9px] font-black text-green-800 uppercase text-center">{insect.role}</span>
+                  <span className={`text-[9px] font-black uppercase text-center ${insectId === 'unknown_insect' ? 'text-gray-300' : 'text-green-800'}`}>{insect.role}</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Back Side (Lifecycle) */}
-          <div 
-            className="absolute inset-0 bg-white rounded-[3rem] shadow-2xl overflow-hidden border-[10px] backface-hidden flex flex-col rotate-y-180"
-            style={{ borderColor: insect.category_color }}
-          >
-            <div className="p-6 flex flex-col h-full overflow-hidden">
-              <h3 className="text-xl font-black text-green-900 mb-4 flex items-center justify-center gap-2 uppercase tracking-tighter shrink-0">
-                <RefreshCw className="w-6 h-6 text-green-600" /> Vòng Đời
-              </h3>
-              
-              <div className="flex-1 flex flex-col gap-2 justify-center overflow-y-auto no-scrollbar py-2">
-                {(insect.lifecycle_steps && insect.lifecycle_steps.length > 0 ? insect.lifecycle_steps : [
-                  { step: 'Trứng', icon: '🥚', description: 'Giai đoạn bắt đầu của sự sống.' },
-                  { step: 'Ấu trùng', icon: '🐛', description: 'Bé lớn lên và ăn thật nhiều.' },
-                  { step: 'Trưởng thành', icon: '🦋', description: 'Sẵn sàng khám phá thế giới!' }
-                ]).map((step, i) => (
-                  <motion.div 
-                    key={i} 
-                    initial={{ x: 20, opacity: 0 }}
-                    animate={isFlipped ? { x: 0, opacity: 1 } : {}}
-                    transition={{ delay: i * 0.1 }}
-                    className="flex items-center gap-3 bg-green-50 rounded-2xl p-3 border-2 border-green-100 shrink-0"
-                  >
-                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm flex-shrink-0">
-                      {step.icon}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[10px] font-black text-green-900 uppercase leading-none truncate">{step.step}</div>
-                      <div className="text-[9px] font-bold text-green-700 leading-tight line-clamp-2">{step.description}</div>
-                    </div>
-                  </motion.div>
-                ))}
+          {insectId !== 'unknown_insect' && (
+            <div 
+              className="absolute inset-0 bg-white rounded-[3rem] shadow-2xl overflow-hidden border-[10px] backface-hidden flex flex-col rotate-y-180"
+              style={{ borderColor: insect.category_color }}
+            >
+              <div className="p-6 flex flex-col h-full overflow-hidden">
+                <h3 className="text-xl font-black text-green-900 mb-4 flex items-center justify-center gap-2 uppercase tracking-tighter shrink-0">
+                  <RefreshCw className="w-6 h-6 text-green-600" /> Vòng Đời
+                </h3>
+                
+                <div className="flex-1 flex flex-col gap-2 justify-center overflow-y-auto no-scrollbar py-2">
+                  {(insect.insect_lifecycles && insect.insect_lifecycles.length > 0 
+                    ? [...insect.insect_lifecycles].sort((a,b) => a.step_order - b.step_order).map(s => ({ step: s.step_name, icon: s.icon, description: s.description }))
+                    : (insect.lifecycle_steps && insect.lifecycle_steps.length > 0 ? insect.lifecycle_steps : [
+                    { step: 'Trứng', icon: '🥚', description: 'Giai đoạn bắt đầu của sự sống.' },
+                    { step: 'Ấu trùng', icon: '🐛', description: 'Bé lớn lên và ăn thật nhiều.' },
+                    { step: 'Trưởng thành', icon: '🦋', description: 'Sẵn sàng khám phá thế giới!' }
+                  ])).map((step, i) => (
+                    <motion.div 
+                      key={i} 
+                      initial={{ x: 20, opacity: 0 }}
+                      animate={isFlipped ? { x: 0, opacity: 1 } : {}}
+                      transition={{ delay: i * 0.1 }}
+                      className="flex items-center gap-3 bg-green-50 rounded-2xl p-3 border-2 border-green-100 shrink-0"
+                    >
+                      <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm flex-shrink-0">
+                        {step.icon}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-black text-green-900 uppercase leading-none truncate">{step.step}</div>
+                        <div className="text-[9px] font-bold text-green-700 leading-tight line-clamp-2">{step.description}</div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </motion.div>
 
         {/* Flip Button */}
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsFlipped(!isFlipped)}
-          className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-14 h-14 bg-white rounded-full shadow-2xl flex items-center justify-center text-green-600 border-4 border-white z-10"
-        >
-          <RefreshCw className={`w-8 h-8 transition-transform duration-500 ${isFlipped ? 'rotate-180' : ''}`} />
-        </motion.button>
+        {insectId !== 'unknown_insect' && (
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsFlipped(!isFlipped)}
+            className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-14 h-14 bg-white rounded-full shadow-2xl flex items-center justify-center text-green-600 border-4 border-white z-10"
+          >
+            <RefreshCw className={`w-8 h-8 transition-transform duration-500 ${isFlipped ? 'rotate-180' : ''}`} />
+          </motion.button>
+        )}
       </div>
 
       <motion.button

@@ -191,11 +191,12 @@ export default function MapScreen({ profile, onBack }: Props) {
 
             {clusters.map((cluster, idx) => {
               const mainItem = cluster[0];
+              const avatarUrl = mainItem.user?.custom_avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${mainItem.user?.avatar_id || 'default'}`;
               const customIcon = new L.Icon({
-                iconUrl: mainItem.insect?.image_cartoon || 'https://cdn-icons-png.flaticon.com/512/1864/1864509.png',
+                iconUrl: avatarUrl,
                 iconSize: [40, 40],
                 iconAnchor: [20, 40],
-                className: 'drop-shadow-lg bg-white rounded-full border-2 border-green-500 p-1'
+                className: 'drop-shadow-lg bg-white rounded-full border-2 border-green-500 p-1 object-cover'
               });
 
               return (

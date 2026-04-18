@@ -28,10 +28,23 @@ export default function AuthScreen({ onToast }: Props) {
   const handleGoogleLogin = async () => {
     setLoading(true);
 
+    const getRedirectUrl = () => {
+      // If running in AI Studio preview iframe, we need to use the parent origin
+      // but since we can't reliably get it, we fallback to window.location.origin
+      // For local development, window.location.origin is correct (http://localhost:3000)
+      let url = window.location.origin;
+      
+      // Ensure the URL doesn't end with a slash
+      if (url.endsWith('/')) {
+        url = url.slice(0, -1);
+      }
+      return url;
+    };
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: getRedirectUrl(),
       },
     });
 

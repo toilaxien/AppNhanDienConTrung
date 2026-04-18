@@ -14,8 +14,15 @@ export interface Insect {
   name_en: string;
   scientific_name: string;
   description: string;
-  lifecycle_steps: {
+  lifecycle_steps?: {
     step: string;
+    description: string;
+    icon: string;
+  }[];
+  // NEW table relationship
+  insect_lifecycles?: {
+    step_order: number;
+    step_name: string;
     description: string;
     icon: string;
   }[];

@@ -1,7 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Camera, Search, X, Star } from 'lucide-react';
+import { ArrowLeft, Camera, Search, X, Star, RefreshCw, Check } from 'lucide-react';
 import { recognizeInsect } from '../services/geminiService';
+import { supabase } from '../supabase';
 
 interface Props {
   onBack: () => void;
@@ -16,6 +17,7 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
   useEffect(() => {
     // Request location
@@ -79,10 +81,8 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
     };
   }, []);
 
-  const handleScan = async () => {
-    if (!videoRef.current || !canvasRef.current || scanning) return;
-
-    setScanning(true);
+  const handleCapture = () => {
+    if (!videoRef.current || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const video = videoRef.current;
     canvas.width = video.videoWidth;
@@ -92,21 +92,52 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
     if (ctx) {
       ctx.drawImage(video, 0, 0);
       const fullBase64 = canvas.toDataURL('image/jpeg');
-      const base64Image = fullBase64.split(',')[1];
-      
-      try {
-        const result = await recognizeInsect(base64Image);
-        if (result && result.confidence > 0.3) {
-          onResult(result.insect_id, fullBase64, location?.lat, location?.lng);
-        } else {
-          onToast(`Bạn này trốn kỹ quá, con thử soi lại gần hơn nhé! (Độ tự tin: ${result?.confidence || 0})`, "info");
-        }
-      } catch (err: any) {
-        console.error("Recognition error:", err);
-        onToast(`Lỗi: ${err.message || "Chú Bướm đang bận một chút"}`, "error");
-      }
+      setCapturedImage(fullBase64);
     }
-    setScanning(false);
+  };
+
+  const handleAnalyze = async () => {
+    if (!capturedImage || scanning) return;
+
+    setScanning(true);
+    const base64Image = capturedImage.split(',')[1];
+    
+    try {
+      // First, get the dynamic list of insect IDs from Supabase
+      const { data: insects, error: dbError } = await supabase.from('insects').select('id');
+      let knownIds = insects ? insects.map(i => i.id) : [];
+      
+      // Safety Fallback: if offline or database error/empty, use the default known list
+      if (knownIds.length === 0) {
+        console.warn("Could not fetch insect IDs from Supabase or list is empty. Using fallback.", dbError);
+        knownIds = ['ant', 'butterfly', 'cockroach', 'dragonfly', 'fly', 'grasshopper', 'honeybee', 'ladybug', 'mosquito', 'spider', 'unknown_insect'];
+      }
+      
+      const result = await recognizeInsect(base64Image, knownIds);
+      if (result && result.insect_id !== 'unknown_insect' && result.insect_id !== 'no_insect' && result.confidence > 0.3) {
+        onResult(result.insect_id, capturedImage, location?.lat, location?.lng);
+        setScanning(false);
+      } else if (result?.insect_id === 'unknown_insect') {
+        // Models know there is an insect but don't know which one
+        onResult('unknown_insect', capturedImage, location?.lat, location?.lng);
+        setScanning(false);
+      } else {
+        // No insect found at all
+        onToast("Côn trùng trốn kỹ quá... chưa thấy được! Thay góc chụp khác nhé.", "info");
+        setTimeout(() => {
+          setCapturedImage(null);
+          setScanning(false);
+        }, 3000);
+      }
+    } catch (err: any) {
+      console.error("Recognition error:", err);
+      // If complete failure, show error and let user try again
+      onToast("Côn trùng trốn kỹ quá... chưa thấy được! Thay góc chụp khác nhé.", "info");
+      setTimeout(() => {
+        setCapturedImage(null);
+        setScanning(false);
+      }, 3000);
+    }
   };
 
   if (error) {
@@ -159,14 +190,21 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
 
   return (
     <div className="h-full w-full bg-black relative overflow-hidden flex flex-col">
-      {/* Camera Preview */}
+      {/* Camera Preview or Captured Image */}
       <div className="flex-1 relative">
         <video 
           ref={videoRef} 
           autoPlay 
           playsInline 
-          className="w-full h-full object-cover"
+          className={`w-full h-full object-cover ${capturedImage ? 'hidden' : ''}`}
         />
+        {capturedImage && (
+          <img 
+            src={capturedImage} 
+            alt="Captured insect" 
+            className="w-full h-full object-cover absolute inset-0"
+          />
+        )}
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Overlay UI */}
@@ -196,40 +234,68 @@ export default function ScanScreen({ onBack, onResult, onToast }: Props) {
             )}
           </div>
           
-          <motion.p 
-            animate={scanning ? { opacity: [0.5, 1, 0.5] } : {}}
-            transition={{ repeat: Infinity, duration: 1 }}
-            className="mt-8 text-white font-black text-xl drop-shadow-lg uppercase tracking-tighter"
-          >
-            {scanning ? 'Đang phân tích...' : 'Đưa kính lúp vào bạn côn trùng nào!'}
-          </motion.p>
+          <div className="absolute top-8 left-0 right-0 text-center z-10">
+            <motion.p 
+              animate={scanning ? { opacity: [0.5, 1, 0.5] } : {}}
+              transition={{ repeat: Infinity, duration: 1 }}
+              className="mt-8 text-white font-black text-xl drop-shadow-lg uppercase tracking-tighter px-4"
+            >
+              {scanning ? 'Đang phân tích...' : capturedImage ? 'Ảnh này được chưa nhỉ?' : 'Đưa kính lúp vào bạn côn trùng nào!'}
+            </motion.p>
+          </div>
         </div>
       </div>
 
       {/* Controls */}
       <div className="bg-black/80 p-8 flex justify-between items-center">
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={onBack}
-          className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </motion.button>
+        {!capturedImage ? (
+          <>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={onBack}
+              className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </motion.button>
 
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={handleScan}
-          disabled={scanning}
-          className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center shadow-2xl transition-all ${scanning ? 'bg-gray-500' : 'bg-orange-500'}`}
-        >
-          {scanning ? (
-            <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-          ) : (
-            <Camera className="w-10 h-10 text-white" />
-          )}
-        </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={handleCapture}
+              className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center shadow-2xl bg-orange-500"
+            >
+              <Camera className="w-10 h-10 text-white" />
+            </motion.button>
 
-        <div className="w-12"></div>
+            <div className="w-12"></div>
+          </>
+        ) : (
+          <>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setCapturedImage(null)}
+              disabled={scanning}
+              className="w-14 h-14 bg-gray-500 rounded-full flex items-center justify-center text-white shadow-lg"
+            >
+              <RefreshCw className="w-6 h-6" />
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={handleAnalyze}
+              disabled={scanning}
+              className={`flex-1 mx-6 h-14 rounded-full flex items-center justify-center shadow-xl font-black uppercase tracking-tighter text-white ${scanning ? 'bg-gray-500' : 'bg-green-500'}`}
+            >
+              {scanning ? (
+                <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Check className="w-6 h-6" />
+                  <span>Nhận diện ngay</span>
+                </div>
+              )}
+            </motion.button>
+          </>
+        )}
       </div>
     </div>
   );
