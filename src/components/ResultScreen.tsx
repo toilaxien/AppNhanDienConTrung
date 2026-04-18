@@ -17,7 +17,7 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
   const [insect, setInsect] = useState<Insect | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [showActualPhoto, setShowActualPhoto] = useState(false);
+  const [showActualPhoto, setShowActualPhoto] = useState(insectId !== 'unknown_insect');
   const [saving, setSaving] = useState(false);
   const [isNew, setIsNew] = useState(false);
 
@@ -35,7 +35,7 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
           habitat_icon: '❓',
           role: 'Bí ẩn',
           role_icon: '✨',
-          image_cartoon: photoData || 'https://cdn-icons-png.flaticon.com/512/1864/1864509.png',
+          image_cartoon: 'https://cdn-icons-png.flaticon.com/512/1864/1864509.png',
           category_color: '#4b5563', // Gray
         });
         
@@ -97,7 +97,10 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
 
     setSaving(true);
     try {
-      const pointsToAdd = isNew ? 10 : 5;
+      let pointsToAdd = isNew ? 10 : 5;
+      if (insectId === 'unknown_insect') {
+        pointsToAdd = 15;
+      }
       
       if (uid.startsWith('local_')) {
         // Save to local storage
@@ -209,9 +212,9 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
                   initial={{ opacity: 0, scale: 1.1 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  src={showActualPhoto && photoData ? photoData : insect.image_cartoon} 
+                  src={(showActualPhoto && photoData) ? photoData : insect.image_cartoon} 
                   alt={insect.name_vi} 
-                  className={`w-full h-full object-cover ${insectId === 'unknown_insect' ? 'contrast-125 saturate-50' : ''}`}
+                  className={`w-full h-full object-cover ${insectId === 'unknown_insect' && showActualPhoto ? 'contrast-125 saturate-50' : ''}`}
                 />
               </AnimatePresence>
 
@@ -241,7 +244,7 @@ export default function ResultScreen({ profile, insectId, photoData, location, o
               )}
               <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-1 shadow-md">
                 <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                <span className="text-xs font-black text-green-900">+{isNew ? 10 : 5}</span>
+                <span className="text-xs font-black text-green-900">+{insectId === 'unknown_insect' ? 15 : (isNew ? 10 : 5)}</span>
               </div>
             </div>
 
