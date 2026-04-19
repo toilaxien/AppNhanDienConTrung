@@ -1,0 +1,27 @@
+name: TuyenTuyet_Databricks_Hanger_Dem
+
+on:
+  schedule:
+    - cron: '0 17 * * *' # Báo thức chạy tự động 0h00 sáng mỗi đêm
+  workflow_dispatch: # Cho phép nhấn nút CHẠY THỦ CÔNG khi thầy cô coi
+
+jobs:
+  Khoi_Tao_Cluster_Va_Chay_Node:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gửi API Tạo Máy Databricks Chạy 1 Lần (Ephemeral Cluster)
+        run: |
+          curl -s -n -X POST "https://community.cloud.databricks.com/api/2.0/jobs/runs/submit" \
+            -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+                  "run_name": "Job_Train_AI_Auto_Scale",
+                  "new_cluster": {
+                    "spark_version": "14.3.x-scala2.12",
+                    "node_type_id": "i3.xlarge",
+                    "num_workers": 0
+                  },
+                  "notebook_task": {
+                    "notebook_path": "${{ secrets.NOTEBOOK_PATH }}"
+                  }
+                }'
