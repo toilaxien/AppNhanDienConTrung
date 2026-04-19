@@ -11,8 +11,8 @@ jobs:
     steps:
       - name: Gửi API Tạo Máy Databricks Chạy 1 Lần (Ephemeral Cluster)
         run: |
-          curl -s -n -X POST "https://community.cloud.databricks.com/api/2.0/jobs/runs/submit" \
-            -H "Authorization: Bearer dapi3db2ae878265303a1a8639dc493e5201" \
+          curl -s -n -X POST "https://dbc-1f0000ef-e18e.cloud.databricks.com/api/2.0/jobs/runs/submit" \
+            -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{
                   "run_name": "Job_Train_AI_Auto_Scale",
