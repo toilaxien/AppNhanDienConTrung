@@ -1,0 +1,20 @@
+{
+  "dataset_name": "dataset_v001",
+  "dataset_version_id": "d05591c2-3db3-4a89-b763-997e587f3900",
+  "image_count": 1,
+  "class_count": 1,
+  "source": {
+    "bucket": "observations",
+    "mlops_status": "approved_for_training",
+    "auto_label_status": "accepted"
+  },
+  "rows": [
+    {
+      "observation_id": "bbfde3d6-7f7a-4ca4-9bd9-52c91ce90b7f",
+      "image_path": "test/insect_unknown_001.jpg",
+      "auto_label_id": "148fa435-b814-4a45-8800-e1a06d746518",
+      "insect_id": "praying_mantis",
+      "class_index": 10
+    }
+  ]
+}

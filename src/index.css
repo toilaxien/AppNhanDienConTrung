@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Quicksand", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fredoka One", cursive, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-[#C1E1C1] text-green-900;
+  }
+}
+
+.nature-bg {
+  background-color: #d4ebd4;
+  background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='20' y='40' font-size='30' opacity='0.3'%3E🌿%3C/text%3E%3Ctext x='120' y='60' font-size='24' opacity='0.3'%3E🌸%3C/text%3E%3Ctext x='160' y='140' font-size='35' opacity='0.3'%3E🍃%3C/text%3E%3Ctext x='40' y='160' font-size='28' opacity='0.3'%3E🌼%3C/text%3E%3Ctext x='90' y='100' font-size='25' opacity='0.3'%3E🍀%3C/text%3E%3Ctext x='180' y='30' font-size='20' opacity='0.3'%3E🌱%3C/text%3E%3Ctext x='80' y='180' font-size='22' opacity='0.3'%3E🍄%3C/text%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  background-repeat: repeat;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

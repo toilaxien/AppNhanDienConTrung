@@ -1,0 +1,7 @@
+path: F:/Cloud_pro/AppNhanDienConTrung/MLOps/exports/dataset_v001
+train: images/train
+val: images/train
+test: images/train
+
+names:
+  0: Praying mantis
