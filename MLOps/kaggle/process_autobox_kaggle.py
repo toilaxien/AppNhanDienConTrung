@@ -528,94 +528,97 @@ def process_autobox() -> None:
 
     print(f"Pending AutoBox rows: {len(rows)}")
 
-    if not rows:
-        return
+    if rows:
+        detector = load_detector()
 
-    detector = load_detector()
+        for row in rows:
+            obs = row["observation"]
+            label = row["auto_label"]
 
-    for row in rows:
-        obs = row["observation"]
-        label = row["auto_label"]
+            observation_id = obs["id"]
+            auto_label_id = label["id"]
+            image_path = obs["image_path"]
+            suggested_label = str(label["suggested_label"]).strip().lower()
 
-        observation_id = obs["id"]
-        auto_label_id = label["id"]
-        image_path = obs["image_path"]
-        suggested_label = str(label["suggested_label"]).strip().lower()
+            print(f"\nProcessing AutoBox: {image_path}")
+            print(f"Suggested label: {suggested_label}")
 
-        print(f"\nProcessing AutoBox: {image_path}")
-        print(f"Suggested label: {suggested_label}")
+            try:
+                image_bytes = download_image(image_path)
+                image_width, image_height = get_image_size(image_bytes)
 
-        try:
-            image_bytes = download_image(image_path)
-            image_width, image_height = get_image_size(image_bytes)
+                suffix = Path(image_path).suffix or ".jpg"
+                temp_image_path = save_image_to_temp(image_bytes, suffix=suffix)
 
-            suffix = Path(image_path).suffix or ".jpg"
-            temp_image_path = save_image_to_temp(image_bytes, suffix=suffix)
+                bbox, detection_confidence, detection_reason = detect_bbox_with_yoloworld(
+                    model=detector,
+                    image_file_path=temp_image_path,
+                    suggested_label=suggested_label,
+                )
 
-            bbox, detection_confidence, detection_reason = detect_bbox_with_yoloworld(
-                model=detector,
-                image_file_path=temp_image_path,
-                suggested_label=suggested_label,
-            )
+                print("Detector result:", bbox, detection_confidence, detection_reason)
 
-            print("Detector result:", bbox, detection_confidence, detection_reason)
+                if bbox is None:
+                    mark_outlier(
+                        observation_id=observation_id,
+                        auto_label_id=auto_label_id,
+                        reason=f"autobox_failed:{detection_reason}",
+                    )
+                    continue
 
-            if bbox is None:
+                bbox = clamp_bbox(bbox, image_width, image_height)
+
+                if detection_confidence < MIN_DETECTION_CONFIDENCE:
+                    mark_outlier(
+                        observation_id=observation_id,
+                        auto_label_id=auto_label_id,
+                        reason=f"detector_low_confidence_{detection_confidence:.2f}",
+                    )
+                    continue
+
+                bbox_ok, bbox_reason = is_bbox_valid(
+                    bbox=bbox,
+                    image_width=image_width,
+                    image_height=image_height,
+                )
+
+                if not bbox_ok:
+                    mark_outlier(
+                        observation_id=observation_id,
+                        auto_label_id=auto_label_id,
+                        reason=bbox_reason,
+                    )
+                    continue
+
+                update_auto_label_bbox(
+                    auto_label_id=auto_label_id,
+                    bbox_json=bbox,
+                    detector_confidence=detection_confidence,
+                )
+
+                mark_bbox_pass_waiting_for_group(
+                    observation_id=observation_id,
+                    reason="detector_bbox_passed_waiting_for_grouping",
+                )
+
+                print(
+                    f"UPDATED bbox: {image_path}, "
+                    f"bbox={bbox}, conf={detection_confidence:.3f}"
+                )
+
+            except Exception as exc:
                 mark_outlier(
                     observation_id=observation_id,
                     auto_label_id=auto_label_id,
-                    reason=f"autobox_failed:{detection_reason}",
+                    reason=f"autobox_error:{str(exc)[:180]}",
                 )
-                continue
+                print(f"ERROR AutoBox {image_path}: {exc}")
 
-            bbox = clamp_bbox(bbox, image_width, image_height)
+    else:
+        print("No pending AutoBox rows. Skip bbox generation.")
 
-            if detection_confidence < MIN_DETECTION_CONFIDENCE:
-                mark_outlier(
-                    observation_id=observation_id,
-                    auto_label_id=auto_label_id,
-                    reason=f"detector_low_confidence_{detection_confidence:.2f}",
-                )
-                continue
-
-            bbox_ok, bbox_reason = is_bbox_valid(
-                bbox=bbox,
-                image_width=image_width,
-                image_height=image_height,
-            )
-
-            if not bbox_ok:
-                mark_outlier(
-                    observation_id=observation_id,
-                    auto_label_id=auto_label_id,
-                    reason=bbox_reason,
-                )
-                continue
-
-            update_auto_label_bbox(
-                auto_label_id=auto_label_id,
-                bbox_json=bbox,
-                detector_confidence=detection_confidence,
-            )
-
-            mark_bbox_pass_waiting_for_group(
-                observation_id=observation_id,
-                reason="detector_bbox_passed_waiting_for_grouping",
-            )
-
-            print(
-                f"UPDATED bbox: {image_path}, "
-                f"bbox={bbox}, conf={detection_confidence:.3f}"
-            )
-
-        except Exception as exc:
-            mark_outlier(
-                observation_id=observation_id,
-                auto_label_id=auto_label_id,
-                reason=f"autobox_error:{str(exc)[:180]}",
-            )
-            print(f"ERROR AutoBox {image_path}: {exc}")
-
+    # Quan trọng: luôn chạy promote, kể cả khi không có ảnh cần đánh bbox mới
+    print("Checking candidate groups for promotion...")
     promote_groups_if_enough_samples()
 
 
