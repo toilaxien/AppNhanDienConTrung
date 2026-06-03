@@ -57,7 +57,7 @@ UNKNOWN_POOL_FOLDER = "unknown_pool/official_batch_001"
 MAX_IMAGES_PER_RUN = 30
 
 # Ngưỡng số ảnh cùng một class đã có bbox tốt để đưa vào training.
-MIN_IMAGES_PER_CANDIDATE_CLASS = 20
+MIN_IMAGES_PER_CANDIDATE_CLASS = 2
 
 # YOLO-World detector config.
 YOLO_WORLD_MODEL = "yolov8s-worldv2.pt"
