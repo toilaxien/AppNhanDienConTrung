@@ -50,7 +50,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # ============================================================
 
 BUCKET_NAME = "observations"
-UNKNOWN_POOL_FOLDER = "unknown_pool/official_batch_001"
+UNKNOWN_POOL_FOLDER = "unknown_pool"
 
 # Số ảnh xử lý mỗi lần Kaggle chạy.
 MAX_IMAGES_PER_RUN = 30
