@@ -53,22 +53,22 @@ BUCKET_NAME = "observations"
 UNKNOWN_POOL_FOLDER = "unknown_pool/official_batch_001"
 
 # Số ảnh xử lý mỗi lần Kaggle chạy.
-# Có GPU thì có thể tăng lên 20-50.
 MAX_IMAGES_PER_RUN = 30
 
-# Ngưỡng số ảnh cùng một class đã có bbox tốt để đưa vào training.
+# Demo hiện tại để 2. Khi chạy thật đổi lại 20 hoặc cao hơn.
 MIN_IMAGES_PER_CANDIDATE_CLASS = 2
 
 # YOLO-World detector config.
 YOLO_WORLD_MODEL = "yolov8s-worldv2.pt"
 
 # Ngưỡng detector.
+# Với demo, nên nới nhẹ để tránh outlier quá nhiều.
 MIN_DETECTION_CONFIDENCE = 0.15
-MIN_BOX_AREA_RATIO = 0.005
-MAX_BOX_AREA_RATIO = 0.90
+MIN_BOX_AREA_RATIO = 0.0005
+MAX_BOX_AREA_RATIO = 0.95
 
 DETECTOR_MODEL_NAME = "yolov8s-worldv2"
-PIPELINE_VERSION = "autobox_yoloworld_v1"
+PIPELINE_VERSION = "autobox_yoloworld_v1_debug"
 
 
 # ============================================================
@@ -136,6 +136,62 @@ def clamp_bbox(bbox: dict[str, int], image_width: int, image_height: int) -> dic
     }
 
 
+def get_bbox_area_ratio(
+    bbox: dict[str, Any] | None,
+    image_width: int,
+    image_height: int,
+) -> float | None:
+    if not bbox:
+        return None
+
+    try:
+        w = float(bbox.get("width", 0))
+        h = float(bbox.get("height", 0))
+        image_area = max(1, image_width * image_height)
+        return (w * h) / image_area
+    except Exception:
+        return None
+
+
+def get_bbox_debug_info(
+    bbox: dict[str, Any] | None,
+    image_width: int,
+    image_height: int,
+    detection_confidence: float,
+    suggested_label: str,
+    detection_reason: str | None = None,
+) -> dict[str, Any]:
+    area_ratio = get_bbox_area_ratio(
+        bbox=bbox,
+        image_width=image_width,
+        image_height=image_height,
+    )
+
+    debug = {
+        "suggested_label": suggested_label,
+        "detection_reason": detection_reason,
+        "detector_confidence": round(float(detection_confidence or 0.0), 4),
+        "image_width": image_width,
+        "image_height": image_height,
+        "min_detection_confidence": MIN_DETECTION_CONFIDENCE,
+        "min_box_area_ratio": MIN_BOX_AREA_RATIO,
+        "max_box_area_ratio": MAX_BOX_AREA_RATIO,
+        "bbox": bbox,
+        "bbox_area_ratio": round(area_ratio, 6) if area_ratio is not None else None,
+    }
+
+    if bbox:
+        debug["bbox_width"] = bbox.get("width")
+        debug["bbox_height"] = bbox.get("height")
+
+    return debug
+
+
+def print_bbox_debug(title: str, debug: dict[str, Any]) -> None:
+    print(f"\n{title}")
+    print(json.dumps(debug, ensure_ascii=False, indent=2))
+
+
 def is_bbox_valid(
     bbox: dict[str, Any] | None,
     image_width: int,
@@ -166,7 +222,7 @@ def is_bbox_valid(
     if x + w > image_width or y + h > image_height:
         return False, "bbox_out_of_image_bounds"
 
-    area_ratio = (w * h) / (image_width * image_height)
+    area_ratio = (w * h) / max(1, image_width * image_height)
 
     if area_ratio < MIN_BOX_AREA_RATIO:
         return False, "bbox_too_small"
@@ -184,6 +240,7 @@ def is_bbox_valid(
 def get_pending_autobox_rows() -> list[dict[str, Any]]:
     """
     Lấy các ảnh đã qua classification nhưng chưa có bbox.
+
     Điều kiện:
     - observations.mlops_status = auto_labeled
     - auto_labels.status = suggested
@@ -245,8 +302,6 @@ def update_auto_label_bbox(
     bbox_json: dict[str, int],
     detector_confidence: float,
 ) -> None:
-    # Tạm lưu detection confidence vào confidence.
-    # Prompt ghi rõ nguồn detector.
     supabase.table("auto_labels").update({
         "bbox_json": bbox_json,
         "confidence": detector_confidence,
@@ -260,14 +315,31 @@ def mark_outlier(
     observation_id: str,
     auto_label_id: str,
     reason: str,
+    debug: dict[str, Any] | None = None,
 ) -> None:
+    """
+    Không lưu bbox lỗi vào auto_labels.bbox_json.
+    Chỉ lưu debug vào observations.review_note để review.
+    """
+    debug_text = ""
+
+    if debug:
+        debug_text = "|debug=" + json.dumps(debug, ensure_ascii=False)[:1200]
+
+    review_note = f"{reason}{debug_text}"
+
+    print("\nMARK OUTLIER")
+    print("reason:", reason)
+    if debug:
+        print_bbox_debug("OUTLIER DEBUG", debug)
+
     supabase.table("auto_labels").update({
         "status": "outlier",
     }).eq("id", auto_label_id).execute()
 
     supabase.table("observations").update({
         "mlops_status": "need_review",
-        "review_note": reason,
+        "review_note": review_note,
     }).eq("id", observation_id).execute()
 
 
@@ -297,13 +369,17 @@ def detect_bbox_with_yoloworld(
 ) -> tuple[dict[str, int] | None, float, str]:
     """
     Dùng YOLO-World open-vocabulary detection.
-    Prompt chính là suggested_label từ Gemini, ví dụ "cicada".
+    Prompt chính là suggested_label từ Gemini, ví dụ 'cicada'.
     """
     prompts = [
-        f"{suggested_label} insect",
         suggested_label,
+        f"{suggested_label} insect",
+        f"a photo of a {suggested_label}",
         "insect",
+        "bug",
     ]
+
+    print("YOLO-World prompts:", prompts)
 
     model.set_classes(prompts)
 
@@ -323,6 +399,21 @@ def detect_bbox_with_yoloworld(
 
     boxes_xyxy = result.boxes.xyxy.cpu().numpy()
     confs = result.boxes.conf.cpu().numpy()
+    classes = result.boxes.cls.cpu().numpy()
+
+    print(f"Detected boxes count: {len(confs)}")
+
+    for idx, conf in enumerate(confs):
+        x1, y1, x2, y2 = boxes_xyxy[idx]
+        class_idx = int(classes[idx])
+        prompt_name = prompts[class_idx] if class_idx < len(prompts) else str(class_idx)
+
+        print(
+            f"  box[{idx}] "
+            f"prompt={prompt_name}, "
+            f"conf={float(conf):.4f}, "
+            f"xyxy=({float(x1):.1f},{float(y1):.1f},{float(x2):.1f},{float(y2):.1f})"
+        )
 
     best_idx = int(confs.argmax())
     best_conf = float(confs[best_idx])
@@ -410,6 +501,8 @@ def get_groups_ready_for_training() -> list[dict[str, Any]]:
     - status = suggested
     - bbox_json != null
     - observation.mlops_status = auto_labeled
+
+    Không gom bằng tiếng Việt.
     """
     label_result = (
         supabase.table("auto_labels")
@@ -506,6 +599,7 @@ def promote_groups_if_enough_samples() -> None:
         for observation_id in observation_ids:
             supabase.table("observations").update({
                 "predicted_insect_id": insect_id,
+                "predicted_label": insect_id,
                 "mlops_status": "approved_for_training",
                 "review_note": (
                     f"detector_bbox_group_promoted:"
@@ -527,6 +621,11 @@ def process_autobox() -> None:
     rows = get_pending_autobox_rows()
 
     print(f"Pending AutoBox rows: {len(rows)}")
+    print(f"MIN_DETECTION_CONFIDENCE={MIN_DETECTION_CONFIDENCE}")
+    print(f"MIN_BOX_AREA_RATIO={MIN_BOX_AREA_RATIO}")
+    print(f"MAX_BOX_AREA_RATIO={MAX_BOX_AREA_RATIO}")
+    print(f"MIN_IMAGES_PER_CANDIDATE_CLASS={MIN_IMAGES_PER_CANDIDATE_CLASS}")
+    print(f"UNKNOWN_POOL_FOLDER={UNKNOWN_POOL_FOLDER}")
 
     if rows:
         detector = load_detector()
@@ -547,6 +646,8 @@ def process_autobox() -> None:
                 image_bytes = download_image(image_path)
                 image_width, image_height = get_image_size(image_bytes)
 
+                print(f"Image size: {image_width}x{image_height}")
+
                 suffix = Path(image_path).suffix or ".jpg"
                 temp_image_path = save_image_to_temp(image_bytes, suffix=suffix)
 
@@ -559,20 +660,42 @@ def process_autobox() -> None:
                 print("Detector result:", bbox, detection_confidence, detection_reason)
 
                 if bbox is None:
+                    debug = get_bbox_debug_info(
+                        bbox=None,
+                        image_width=image_width,
+                        image_height=image_height,
+                        detection_confidence=detection_confidence,
+                        suggested_label=suggested_label,
+                        detection_reason=detection_reason,
+                    )
+
                     mark_outlier(
                         observation_id=observation_id,
                         auto_label_id=auto_label_id,
                         reason=f"autobox_failed:{detection_reason}",
+                        debug=debug,
                     )
                     continue
 
                 bbox = clamp_bbox(bbox, image_width, image_height)
 
+                debug_after_clamp = get_bbox_debug_info(
+                    bbox=bbox,
+                    image_width=image_width,
+                    image_height=image_height,
+                    detection_confidence=detection_confidence,
+                    suggested_label=suggested_label,
+                    detection_reason=detection_reason,
+                )
+
+                print_bbox_debug("BBOX AFTER CLAMP", debug_after_clamp)
+
                 if detection_confidence < MIN_DETECTION_CONFIDENCE:
                     mark_outlier(
                         observation_id=observation_id,
                         auto_label_id=auto_label_id,
-                        reason=f"detector_low_confidence_{detection_confidence:.2f}",
+                        reason=f"detector_low_confidence_{detection_confidence:.3f}",
+                        debug=debug_after_clamp,
                     )
                     continue
 
@@ -582,13 +705,18 @@ def process_autobox() -> None:
                     image_height=image_height,
                 )
 
+                print(f"BBox quality gate: {bbox_ok}, reason={bbox_reason}")
+
                 if not bbox_ok:
                     mark_outlier(
                         observation_id=observation_id,
                         auto_label_id=auto_label_id,
                         reason=bbox_reason,
+                        debug=debug_after_clamp,
                     )
                     continue
+
+                print_bbox_debug("BBOX PASSED QUALITY GATE", debug_after_clamp)
 
                 update_auto_label_bbox(
                     auto_label_id=auto_label_id,
@@ -598,7 +726,10 @@ def process_autobox() -> None:
 
                 mark_bbox_pass_waiting_for_group(
                     observation_id=observation_id,
-                    reason="detector_bbox_passed_waiting_for_grouping",
+                    reason=(
+                        "detector_bbox_passed_waiting_for_grouping"
+                        f"|debug={json.dumps(debug_after_clamp, ensure_ascii=False)[:1000]}"
+                    ),
                 )
 
                 print(
@@ -611,13 +742,17 @@ def process_autobox() -> None:
                     observation_id=observation_id,
                     auto_label_id=auto_label_id,
                     reason=f"autobox_error:{str(exc)[:180]}",
+                    debug={
+                        "suggested_label": suggested_label,
+                        "image_path": image_path,
+                        "error": str(exc)[:300],
+                    },
                 )
                 print(f"ERROR AutoBox {image_path}: {exc}")
 
     else:
         print("No pending AutoBox rows. Skip bbox generation.")
 
-    # Quan trọng: luôn chạy promote, kể cả khi không có ảnh cần đánh bbox mới
     print("Checking candidate groups for promotion...")
     promote_groups_if_enough_samples()
 
