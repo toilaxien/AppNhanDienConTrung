@@ -6,7 +6,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageDraw
 from supabase import create_client
 from ultralytics import YOLOWorld
 
@@ -50,6 +50,9 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # ============================================================
 
 BUCKET_NAME = "observations"
+
+# Quét tất cả batch con bên trong unknown_pool:
+# unknown_pool/<batch_id>/<images>
 UNKNOWN_POOL_FOLDER = "unknown_pool"
 
 # Số ảnh xử lý mỗi lần Kaggle chạy.
@@ -61,14 +64,21 @@ MIN_IMAGES_PER_CANDIDATE_CLASS = 2
 # YOLO-World detector config.
 YOLO_WORLD_MODEL = "yolov8s-worldv2.pt"
 
-# Ngưỡng detector.
-# Với demo, nên nới nhẹ để tránh outlier quá nhiều.
-MIN_DETECTION_CONFIDENCE = 0.15
-MIN_BOX_AREA_RATIO = 0.0005
-MAX_BOX_AREA_RATIO = 0.95
+# Ngưỡng để YOLO-World trả candidate box.
+# Đặt thấp để không mất box sớm.
+DETECTOR_PREDICT_CONF = 0.01
+
+# Ngưỡng quality gate sau khi đã có candidate box.
+MIN_DETECTION_CONFIDENCE = 0.10
+MIN_BOX_AREA_RATIO = 0.0002
+MAX_BOX_AREA_RATIO = 0.98
+
+# Lưu ảnh debug có vẽ bbox trong Kaggle output.
+SAVE_DEBUG_IMAGES = True
+DEBUG_IMAGE_DIR = "/kaggle/working/debug_autobox"
 
 DETECTOR_MODEL_NAME = "yolov8s-worldv2"
-PIPELINE_VERSION = "autobox_yoloworld_v1_debug"
+PIPELINE_VERSION = "autobox_yoloworld_v2_recall_first"
 
 
 # ============================================================
@@ -76,10 +86,128 @@ PIPELINE_VERSION = "autobox_yoloworld_v1_debug"
 # ============================================================
 
 def slugify_label(label: str) -> str:
-    label = label.strip().lower()
+    label = str(label or "").strip().lower()
     label = re.sub(r"[^a-z0-9]+", "_", label)
     label = re.sub(r"_+", "_", label).strip("_")
     return label or "unknown_insect"
+
+
+def canonicalize_label(label: str) -> str:
+    """
+    Chuẩn hóa nhãn tiếng Anh do Gemini trả về.
+    Không dùng suggested_label_vi để gom nhóm.
+    """
+    raw = str(label or "").strip().lower()
+    slug = slugify_label(raw)
+
+    alias_map = {
+        "orchid_mantis": "mantis",
+        "praying_mantis": "mantis",
+        "mantis": "mantis",
+
+        "cicada": "cicada",
+
+        "ladybird": "ladybug",
+        "ladybug": "ladybug",
+
+        "honey_bee": "bee",
+        "honeybee": "bee",
+        "bee": "bee",
+
+        "wasp": "wasp",
+
+        "dragon_fly": "dragonfly",
+        "dragonfly": "dragonfly",
+
+        "grass_hopper": "grasshopper",
+        "grasshopper": "grasshopper",
+
+        "cock_roach": "cockroach",
+        "cockroach": "cockroach",
+
+        "butter_fly": "butterfly",
+        "butterfly": "butterfly",
+    }
+
+    return alias_map.get(slug, raw)
+
+
+def build_detector_prompts(suggested_label: str) -> list[str]:
+    """
+    Tạo prompt rộng hơn để YOLO-World dễ detect hơn.
+    Ví dụ Gemini trả 'orchid mantis' thì thử thêm 'mantis', 'praying mantis'.
+    """
+    raw = str(suggested_label or "").strip().lower()
+    canonical = canonicalize_label(raw)
+
+    prompts = [
+        raw,
+        f"{raw} insect",
+        f"a photo of a {raw}",
+        canonical,
+        f"{canonical} insect",
+        f"a photo of a {canonical}",
+    ]
+
+    if "mantis" in raw or canonical == "mantis":
+        prompts.extend([
+            "mantis",
+            "praying mantis",
+            "green mantis",
+            "insect with long legs",
+            "insect",
+            "bug",
+        ])
+
+    elif "cicada" in raw or canonical == "cicada":
+        prompts.extend([
+            "cicada",
+            "cicada insect",
+            "insect on tree",
+            "insect",
+            "bug",
+        ])
+
+    elif "beetle" in raw or canonical == "beetle":
+        prompts.extend([
+            "beetle",
+            "insect beetle",
+            "insect",
+            "bug",
+        ])
+
+    elif "bee" in raw or canonical == "bee":
+        prompts.extend([
+            "bee",
+            "honey bee",
+            "flying insect",
+            "insect",
+            "bug",
+        ])
+
+    elif "wasp" in raw or canonical == "wasp":
+        prompts.extend([
+            "wasp",
+            "flying insect",
+            "insect",
+            "bug",
+        ])
+
+    else:
+        prompts.extend([
+            "insect",
+            "bug",
+            "arthropod",
+            "small animal",
+        ])
+
+    unique_prompts = []
+    for prompt in prompts:
+        prompt = str(prompt or "").strip().lower()
+        if prompt and prompt not in unique_prompts:
+            unique_prompts.append(prompt)
+
+    return unique_prompts
 
 
 def download_image(image_path: str) -> bytes:
@@ -169,10 +297,12 @@ def get_bbox_debug_info(
 
     debug = {
         "suggested_label": suggested_label,
+        "canonical_label": canonicalize_label(suggested_label),
         "detection_reason": detection_reason,
         "detector_confidence": round(float(detection_confidence or 0.0), 4),
         "image_width": image_width,
         "image_height": image_height,
+        "detector_predict_conf": DETECTOR_PREDICT_CONF,
         "min_detection_confidence": MIN_DETECTION_CONFIDENCE,
         "min_box_area_ratio": MIN_BOX_AREA_RATIO,
         "max_box_area_ratio": MAX_BOX_AREA_RATIO,
@@ -190,6 +320,66 @@ def get_bbox_debug_info(
 def print_bbox_debug(title: str, debug: dict[str, Any]) -> None:
     print(f"\n{title}")
     print(json.dumps(debug, ensure_ascii=False, indent=2))
+
+
+def save_debug_bbox_image(
+    image_bytes: bytes,
+    bbox: dict[str, Any] | None,
+    image_path: str,
+    suggested_label: str,
+    confidence: float,
+    reason: str,
+) -> str | None:
+    """
+    Lưu ảnh debug có vẽ bbox vào /kaggle/working/debug_autobox.
+    Không ảnh hưởng database và không ảnh hưởng các job khác.
+    """
+    if not SAVE_DEBUG_IMAGES:
+        return None
+
+    try:
+        debug_dir = Path(DEBUG_IMAGE_DIR)
+        debug_dir.mkdir(parents=True, exist_ok=True)
+
+        with Image.open(BytesIO(image_bytes)) as img:
+            img = img.convert("RGB")
+            draw = ImageDraw.Draw(img)
+
+            if bbox:
+                x = int(bbox["x"])
+                y = int(bbox["y"])
+                w = int(bbox["width"])
+                h = int(bbox["height"])
+
+                draw.rectangle(
+                    [x, y, x + w, y + h],
+                    outline="red",
+                    width=4,
+                )
+
+                text = f"{suggested_label} {confidence:.3f} | {reason}"
+                draw.text(
+                    (x, max(0, y - 18)),
+                    text,
+                    fill="red",
+                )
+            else:
+                draw.text(
+                    (10, 10),
+                    f"NO BOX | {suggested_label} | {reason}",
+                    fill="red",
+                )
+
+            safe_name = image_path.replace("/", "_")
+            output_path = debug_dir / f"{safe_name}.jpg"
+            img.save(output_path, quality=95)
+
+        print(f"Saved debug bbox image: {output_path}")
+        return str(output_path)
+
+    except Exception as exc:
+        print(f"Failed to save debug bbox image: {exc}")
+        return None
 
 
 def is_bbox_valid(
@@ -368,24 +558,22 @@ def detect_bbox_with_yoloworld(
     suggested_label: str,
 ) -> tuple[dict[str, int] | None, float, str]:
     """
-    Dùng YOLO-World open-vocabulary detection.
-    Prompt chính là suggested_label từ Gemini, ví dụ 'cicada'.
+    YOLO-World recall-first:
+    - Predict với conf thấp để lấy candidate box.
+    - Prompt được mở rộng từ suggested_label.
+    - Quality gate phía sau mới quyết định box có được dùng không.
     """
-    prompts = [
-        suggested_label,
-        f"{suggested_label} insect",
-        f"a photo of a {suggested_label}",
-        "insect",
-        "bug",
-    ]
+    prompts = build_detector_prompts(suggested_label)
 
     print("YOLO-World prompts:", prompts)
+    print(f"DETECTOR_PREDICT_CONF={DETECTOR_PREDICT_CONF}")
+    print(f"MIN_DETECTION_CONFIDENCE={MIN_DETECTION_CONFIDENCE}")
 
     model.set_classes(prompts)
 
     results = model.predict(
         source=image_file_path,
-        conf=MIN_DETECTION_CONFIDENCE,
+        conf=DETECTOR_PREDICT_CONF,
         verbose=False,
     )
 
@@ -403,10 +591,24 @@ def detect_bbox_with_yoloworld(
 
     print(f"Detected boxes count: {len(confs)}")
 
+    candidates: list[dict[str, Any]] = []
+
     for idx, conf in enumerate(confs):
         x1, y1, x2, y2 = boxes_xyxy[idx]
         class_idx = int(classes[idx])
         prompt_name = prompts[class_idx] if class_idx < len(prompts) else str(class_idx)
+        bbox = bbox_xyxy_to_xywh_json(x1, y1, x2, y2)
+
+        candidate = {
+            "idx": idx,
+            "prompt": prompt_name,
+            "class_idx": class_idx,
+            "confidence": float(conf),
+            "bbox": bbox,
+            "xyxy": [float(x1), float(y1), float(x2), float(y2)],
+        }
+
+        candidates.append(candidate)
 
         print(
             f"  box[{idx}] "
@@ -415,13 +617,33 @@ def detect_bbox_with_yoloworld(
             f"xyxy=({float(x1):.1f},{float(y1):.1f},{float(x2):.1f},{float(y2):.1f})"
         )
 
-    best_idx = int(confs.argmax())
-    best_conf = float(confs[best_idx])
-    x1, y1, x2, y2 = boxes_xyxy[best_idx]
+    if not candidates:
+        return None, 0.0, "no_candidate_boxes"
 
-    bbox = bbox_xyxy_to_xywh_json(x1, y1, x2, y2)
+    canonical = canonicalize_label(suggested_label)
+    raw = suggested_label.strip().lower()
 
-    return bbox, best_conf, "detected"
+    specific_terms = {
+        raw,
+        canonical,
+        f"{raw} insect",
+        f"{canonical} insect",
+        f"a photo of a {raw}",
+        f"a photo of a {canonical}",
+    }
+
+    def candidate_score(item: dict[str, Any]) -> tuple[int, float]:
+        prompt = str(item["prompt"]).strip().lower()
+        is_specific = 1 if prompt in specific_terms else 0
+        return is_specific, float(item["confidence"])
+
+    best = sorted(candidates, key=candidate_score, reverse=True)[0]
+
+    return (
+        best["bbox"],
+        float(best["confidence"]),
+        f"detected:prompt={best['prompt']}",
+    )
 
 
 # ============================================================
@@ -462,7 +684,7 @@ def ensure_candidate_insect(group: dict[str, Any]) -> str:
     suggested_label_vi = group["suggested_label_vi"]
     scientific_name = group["scientific_name"]
 
-    insect_id = slugify_label(suggested_label)
+    insect_id = slugify_label(canonicalize_label(suggested_label))
 
     if insect_exists(insect_id):
         print(f"Candidate insect exists: {insect_id}")
@@ -473,7 +695,7 @@ def ensure_candidate_insect(group: dict[str, Any]) -> str:
     payload = {
         "id": insect_id,
         "name_vi": suggested_label_vi or suggested_label,
-        "name_en": suggested_label.title(),
+        "name_en": canonicalize_label(suggested_label).title(),
         "scientific_name": scientific_name or "Unknown",
         "description": f"Candidate class discovered automatically from unknown pool: {suggested_label}.",
         "habitat": "Chưa xác định. Cần kiểm duyệt và bổ sung thông tin sau.",
@@ -520,9 +742,11 @@ def get_groups_ready_for_training() -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
 
     for label in labels:
-        suggested_label = str(label.get("suggested_label") or "").strip().lower()
+        raw_suggested_label = str(label.get("suggested_label") or "").strip().lower()
+        canonical_label = canonicalize_label(raw_suggested_label)
+        group_key = slugify_label(canonical_label)
 
-        if suggested_label in {
+        if group_key in {
             "",
             "non_insect",
             "unknown",
@@ -549,12 +773,10 @@ def get_groups_ready_for_training() -> list[dict[str, Any]]:
         if obs["mlops_status"] != "auto_labeled":
             continue
 
-        group_key = slugify_label(suggested_label)
-
         if group_key not in groups:
             groups[group_key] = {
                 "normalized_label": group_key,
-                "suggested_label": suggested_label,
+                "suggested_label": canonical_label,
                 "suggested_label_vi": label.get("suggested_label_vi"),
                 "scientific_name": label.get("scientific_name"),
                 "auto_label_ids": [],
@@ -621,6 +843,7 @@ def process_autobox() -> None:
     rows = get_pending_autobox_rows()
 
     print(f"Pending AutoBox rows: {len(rows)}")
+    print(f"DETECTOR_PREDICT_CONF={DETECTOR_PREDICT_CONF}")
     print(f"MIN_DETECTION_CONFIDENCE={MIN_DETECTION_CONFIDENCE}")
     print(f"MIN_BOX_AREA_RATIO={MIN_BOX_AREA_RATIO}")
     print(f"MAX_BOX_AREA_RATIO={MAX_BOX_AREA_RATIO}")
@@ -660,6 +883,15 @@ def process_autobox() -> None:
                 print("Detector result:", bbox, detection_confidence, detection_reason)
 
                 if bbox is None:
+                    save_debug_bbox_image(
+                        image_bytes=image_bytes,
+                        bbox=None,
+                        image_path=image_path,
+                        suggested_label=suggested_label,
+                        confidence=detection_confidence,
+                        reason=detection_reason,
+                    )
+
                     debug = get_bbox_debug_info(
                         bbox=None,
                         image_width=image_width,
@@ -678,6 +910,15 @@ def process_autobox() -> None:
                     continue
 
                 bbox = clamp_bbox(bbox, image_width, image_height)
+
+                save_debug_bbox_image(
+                    image_bytes=image_bytes,
+                    bbox=bbox,
+                    image_path=image_path,
+                    suggested_label=suggested_label,
+                    confidence=detection_confidence,
+                    reason=detection_reason,
+                )
 
                 debug_after_clamp = get_bbox_debug_info(
                     bbox=bbox,
@@ -744,6 +985,7 @@ def process_autobox() -> None:
                     reason=f"autobox_error:{str(exc)[:180]}",
                     debug={
                         "suggested_label": suggested_label,
+                        "canonical_label": canonicalize_label(suggested_label),
                         "image_path": image_path,
                         "error": str(exc)[:300],
                     },
