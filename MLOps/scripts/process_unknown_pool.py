@@ -34,7 +34,7 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 BUCKET_NAME = "observations"
-UNKNOWN_POOL_FOLDER = "unknown_pool/official_batch_001"
+UNKNOWN_POOL_FOLDER = "unknown_pool"
 
 VALID_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
